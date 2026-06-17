@@ -1,0 +1,49 @@
+# ====== Общее ======
+.DS_Store
+*.log
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+venv/
+.venv/
+
+# ====== Backend (Node.js) ======
+backend/node_modules/
+backend/.env
+backend/.env.local
+backend/uploads/*
+!backend/uploads/.gitkeep
+backend/npm-debug.log*
+backend/package-lock.json
+
+# ====== Frontend (Flutter) ======
+frontend/.dart_tool/
+frontend/.packages
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/.pub/
+frontend/.env
+
+# Android
+frontend/android/.gradle/
+frontend/android/app/debug
+frontend/android/app/profile
+frontend/android/app/release
+frontend/android/local.properties
+frontend/android/.kotlin/
+
+# iOS
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Flutter/Flutter.framework
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Flutter/flutter_export_environment.sh
+frontend/ios/Runner.xcworkspace/xcuserdata/
+frontend/ios/Runner.xcodeproj/xcuserdata/
+frontend/ios/Runner.xcodeproj/project.xcworkspace/xcuserdata/
+frontend/ios/build/
+*.xcuserstate
