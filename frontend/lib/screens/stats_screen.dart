@@ -30,24 +30,46 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Future<void> _loadStats() async {
     setState(() => _isLoading = true);
-    try {
-      final overall = await _statsService.getOverallStats();
-      final periodStats = await _statsService.getPeriodStats(_selectedPeriod);
-      final genres = await _statsService.getTopGenres();
 
+    OverallStats? overall;
+    List<PeriodStat> periodStats = [];
+    List<GenreStat> genres = [];
+    String? errorMessage;
+
+    // Каждый запрос обрабатывается отдельно: если один из них упадёт
+    // (например, статистика по жанрам), это не должно скрыть данные,
+    // которые успешно загрузились из других запросов.
+    try {
+      overall = await _statsService.getOverallStats();
+    } catch (e) {
+      errorMessage = 'Сводная статистика: $e';
+    }
+
+    try {
+      periodStats = await _statsService.getPeriodStats(_selectedPeriod);
+    } catch (e) {
+      errorMessage = 'Статистика по периодам: $e';
+    }
+
+    try {
+      genres = await _statsService.getTopGenres();
+    } catch (e) {
+      errorMessage ??= 'Жанры: $e';
+    }
+
+    if (mounted) {
       setState(() {
         _overall = overall;
         _periodStats = periodStats;
         _topGenres = genres;
+        _isLoading = false;
       });
-    } catch (e) {
-      if (mounted) {
+
+      if (errorMessage != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка загрузки статистики: $e')),
+          SnackBar(content: Text('Ошибка загрузки статистики: $errorMessage')),
         );
       }
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -66,34 +88,55 @@ class _StatsScreenState extends State<StatsScreen> {
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: _loadStats,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (_isLoading)
-                const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 40),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else ...[
-                if (_overall != null) _buildOverallCards(_overall!),
-                const SizedBox(height: 24),
-                _buildPeriodSelector(),
-                const SizedBox(height: 16),
-                if (_periodStats.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 24),
-                    child: Center(
-                      child: Text('Пока нет завершённых книг за этот период',
-                          style: TextStyle(color: Colors.grey.shade600)),
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Column(
+                        children: [
+                          if (_overall != null) _buildOverallCards(_overall!),
+                          const SizedBox(height: 8),
+                          _buildPeriodSelector(),
+                        ],
+                      ),
                     ),
-                  )
-                else
-                  _buildChart(),
-                const SizedBox(height: 24),
-                if (_topGenres.isNotEmpty) _buildGenresList(),
-              ],
-            ],
-          ),
+                    if (_periodStats.isEmpty)
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            return ListView(
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                SizedBox(
+                                  height: constraints.maxHeight,
+                                  child: Center(
+                                    child: Text(
+                                      'Пока нет завершённых книг за этот период',
+                                      style: TextStyle(color: Colors.grey.shade600),
+                                      textAlign: TextAlign.center,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            );
+                          },
+                        ),
+                      )
+                    else
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+                          children: [
+                            _buildChart(),
+                            const SizedBox(height: 24),
+                            if (_topGenres.isNotEmpty) _buildGenresList(),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
         ),
       ),
     );
