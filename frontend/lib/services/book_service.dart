@@ -82,10 +82,20 @@ class BookService {
   }
 
   // URL для открытия файла книги в просмотрщике (PDF/EPUB)
+  // Токен передаётся в строке запроса — нужно для PDF-просмотрщика,
+  // который не умеет добавлять заголовки к сетевым запросам.
   Future<String> getBookFileUrl(int bookId) async {
     final token = await _storage.getToken();
     return '${ApiConfig.baseUrl}/books/$bookId/file?token=$token';
   }
+
+  // Чистый URL без токена в строке — для скачивания через Dio с заголовком Authorization
+  String getBookFileDownloadUrl(int bookId) {
+    return '${ApiConfig.baseUrl}/books/$bookId/file';
+  }
+
+  // Возвращает токен авторизации — используется в читалке при скачивании файла
+  Future<String?> getToken() => _storage.getToken();
 
   // Открывает сессию чтения при входе в читалку.
   // Возвращает sessionId, который нужно передать в endReadingSession при выходе.

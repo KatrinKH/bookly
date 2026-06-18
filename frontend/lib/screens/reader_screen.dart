@@ -26,6 +26,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   EpubController? _epubController;
   String? _fileUrl;
   bool _isLoading = true;
+  bool _isDownloading = false;
   int? _sessionId; // id открытой сессии чтения для закрытия при выходе
 
   @override
@@ -51,9 +52,20 @@ class _ReaderScreenState extends State<ReaderScreen> {
     final url = await _bookService.getBookFileUrl(widget.book.id);
 
     if (widget.book.fileFormat == 'epub') {
-      final localPath = await _downloadEpubToTempFile(url);
+      final tempDir = await getTemporaryDirectory();
+      final localPath = '${tempDir.path}/book_${widget.book.id}.epub';
+      final isCached = File(localPath).existsSync();
+
+      if (!isCached && mounted) {
+        setState(() => _isDownloading = true);
+      }
+
+      final path = await _downloadEpubToTempFile();
+
+      if (mounted) setState(() => _isDownloading = false);
+
       _epubController = EpubController(
-        document: EpubDocument.openFile(File(localPath)),
+        document: EpubDocument.openFile(File(path)),
       );
     }
 
@@ -63,10 +75,26 @@ class _ReaderScreenState extends State<ReaderScreen> {
     });
   }
 
-  Future<String> _downloadEpubToTempFile(String url) async {
+  Future<String> _downloadEpubToTempFile() async {
     final tempDir = await getTemporaryDirectory();
     final localPath = '${tempDir.path}/book_${widget.book.id}.epub';
-    await Dio().download(url, localPath);
+
+    // Если файл уже скачан ранее — используем кэш, не скачиваем повторно
+    if (File(localPath).existsSync()) {
+      return localPath;
+    }
+
+    final downloadUrl = _bookService.getBookFileDownloadUrl(widget.book.id);
+    final token = await _bookService.getToken();
+
+    await Dio().download(
+      downloadUrl,
+      localPath,
+      options: Options(
+        headers: {'Authorization': 'Bearer $token'},
+      ),
+    );
+
     return localPath;
   }
 
@@ -88,7 +116,27 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return Scaffold(
       appBar: AppBar(title: Text(widget.book.title)),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                  Text(
+                    _isDownloading ? 'Скачивание книги...' : 'Открытие...',
+                    style: TextStyle(color: Colors.grey.shade600),
+                  ),
+                  if (_isDownloading) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Это займёт немного времени\nпри первом открытии',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+                    ),
+                  ],
+                ],
+              ),
+            )
           : widget.book.fileFormat == 'pdf'
               ? _buildPdfViewer()
               : _buildEpubViewer(),

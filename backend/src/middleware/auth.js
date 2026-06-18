@@ -1,16 +1,22 @@
 const jwt = require('jsonwebtoken');
 require('dotenv').config();
 
-// Middleware проверяет наличие и валидность JWT-токена в заголовке Authorization.
-// При успехе добавляет req.userId, доступный во всех последующих обработчиках маршрута.
+// Middleware проверяет JWT-токен — сначала в заголовке Authorization,
+// затем в query-параметре ?token= (нужно для PDF-просмотрщика, который
+// не умеет добавлять заголовки к сетевым запросам).
 function authMiddleware(req, res, next) {
-  const authHeader = req.headers.authorization;
+  let token = null;
 
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Требуется авторизация' });
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (req.query.token) {
+    token = req.query.token;
   }
 
-  const token = authHeader.split(' ')[1];
+  if (!token) {
+    return res.status(401).json({ error: 'Требуется авторизация' });
+  }
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
