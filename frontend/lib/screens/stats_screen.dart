@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../models/stats.dart';
 import '../services/stats_service.dart';
+import '../utils/app_theme.dart';
 
 // Экран статистики чтения: сводные показатели, переключение периода
 // (месяц/сезон/год) и график количества прочитанных книг.
@@ -52,39 +53,47 @@ class _StatsScreenState extends State<StatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: RefreshIndicator(
-        onRefresh: _loadStats,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            const Text('Статистика чтения',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22)),
-            const SizedBox(height: 16),
-            if (_isLoading)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator()),
-              )
-            else ...[
-              if (_overall != null) _buildOverallCards(_overall!),
-              const SizedBox(height: 24),
-              _buildPeriodSelector(),
-              const SizedBox(height: 16),
-              if (_periodStats.isEmpty)
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: Center(
-                    child: Text('Пока нет завершённых книг за этот период',
-                        style: TextStyle(color: Colors.grey.shade600)),
-                  ),
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Статистика чтения',
+          style: AppTheme.brandFont(
+            fontSize: 22,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+        ),
+      ),
+      body: SafeArea(
+        child: RefreshIndicator(
+          onRefresh: _loadStats,
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              if (_isLoading)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 40),
+                  child: Center(child: CircularProgressIndicator()),
                 )
-              else
-                _buildChart(),
-              const SizedBox(height: 24),
-              if (_topGenres.isNotEmpty) _buildGenresList(),
+              else ...[
+                if (_overall != null) _buildOverallCards(_overall!),
+                const SizedBox(height: 24),
+                _buildPeriodSelector(),
+                const SizedBox(height: 16),
+                if (_periodStats.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 24),
+                    child: Center(
+                      child: Text('Пока нет завершённых книг за этот период',
+                          style: TextStyle(color: Colors.grey.shade600)),
+                    ),
+                  )
+                else
+                  _buildChart(),
+                const SizedBox(height: 24),
+                if (_topGenres.isNotEmpty) _buildGenresList(),
+              ],
             ],
-          ],
+          ),
         ),
       ),
     );

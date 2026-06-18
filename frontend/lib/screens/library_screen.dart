@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/book.dart';
 import '../services/book_service.dart';
+import '../utils/app_theme.dart';
 import '../widgets/book_card.dart';
 import 'book_detail_screen.dart';
 import 'upload_book_screen.dart';
@@ -99,7 +100,14 @@ class _LibraryTabState extends State<_LibraryTab> {
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
-              title: const Text('Моя библиотека', style: TextStyle(fontWeight: FontWeight.bold)),
+              title: Text(
+                'Моя библиотека',
+                style: AppTheme.brandFont(
+                  fontSize: 24,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              centerTitle: true,
               floating: true,
               automaticallyImplyLeading: false,
             ),
