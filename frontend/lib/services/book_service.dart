@@ -13,6 +13,11 @@ class BookService {
 
   Future<Map<String, String>> _authHeaders() async {
     final token = await _storage.getToken();
+
+    if (token == null) {
+      throw Exception('Не выполнен вход: токен авторизации отсутствует');
+    }
+
     return {'Authorization': 'Bearer $token'};
   }
 
@@ -51,9 +56,13 @@ class BookService {
     );
 
     final response = await http.get(uri, headers: headers);
-    final data = jsonDecode(response.body) as List;
+    final data = jsonDecode(response.body);
 
-    return data.map((json) => Book.fromJson(json)).toList();
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось загрузить книги (код ${response.statusCode})');
+    }
+
+    return (data as List).map((json) => Book.fromJson(json)).toList();
   }
 
   Future<Book> getBookById(int id) async {
@@ -62,7 +71,14 @@ class BookService {
       Uri.parse('${ApiConfig.baseUrl}/books/$id'),
       headers: headers,
     );
-    return Book.fromJson(jsonDecode(response.body));
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось загрузить книгу (код ${response.statusCode})');
+    }
+
+    return Book.fromJson(data);
   }
 
   // URL для открытия файла книги в просмотрщике (PDF/EPUB)
@@ -90,7 +106,13 @@ class BookService {
       }),
     );
 
-    return Book.fromJson(jsonDecode(response.body));
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось обновить прогресс (код ${response.statusCode})');
+    }
+
+    return Book.fromJson(data);
   }
 
   // Отметить книгу прочитанной, поставить оценку и лайк
@@ -111,7 +133,13 @@ class BookService {
       }),
     );
 
-    return Book.fromJson(jsonDecode(response.body));
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось завершить книгу (код ${response.statusCode})');
+    }
+
+    return Book.fromJson(data);
   }
 
   Future<void> deleteBook(int bookId) async {
