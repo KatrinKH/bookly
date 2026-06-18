@@ -24,8 +24,8 @@ dependencies:
   # Просмотр PDF
   syncfusion_flutter_pdfviewer: ^27.1.48
 
-  # Просмотр EPUB (простая вертикальная прокрутка)
-  epub_view: ^3.2.0
+  # Просмотр EPUB (вертикальный скролл, надёжное сохранение позиции через CFI)
+  flutter_epub_viewer: ^1.2.7
 
   # Графики для экрана статистики
   fl_chart: ^0.69.0
