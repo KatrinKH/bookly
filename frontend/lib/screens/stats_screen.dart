@@ -144,9 +144,11 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Widget _buildOverallCards(OverallStats stats) {
     final hours = stats.totalReadingHours;
-    final hoursLabel = hours < 1
-        ? '${(hours * 60).round()} мин'
-        : '${hours.toStringAsFixed(1)} ч';
+    final hoursLabel = hours == 0
+        ? '0'
+        : hours < 1
+            ? '${(hours * 60).round()} мин'
+            : '${hours.toStringAsFixed(1)} ч';
 
     return Row(
       children: [
