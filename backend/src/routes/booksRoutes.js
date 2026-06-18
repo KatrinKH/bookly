@@ -15,6 +15,8 @@ router.get('/', booksController.getBooks);
 router.get('/:id', booksController.getBookById);
 router.get('/:id/file', booksController.downloadBookFile);
 router.patch('/:id/progress', booksController.updateProgress);
+router.post('/:id/session/start', booksController.startReadingSession);
+router.patch('/:id/session/end', booksController.endReadingSession);
 router.patch('/:id/finish', booksController.finishBook);
 router.delete('/:id', booksController.deleteBook);
 

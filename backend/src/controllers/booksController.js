@@ -108,8 +108,7 @@ async function downloadBookFile(req, res) {
   }
 }
 
-// Обновление прогресса чтения. При первом открытии книги фиксируется started_at
-// и автоматически открывается сессия чтения, используемая позже для статистики.
+// Обновление прогресса чтения. При первом открытии книги фиксируется started_at.
 async function updateProgress(req, res) {
   const { currentPage, totalPages } = req.body;
 
@@ -123,9 +122,6 @@ async function updateProgress(req, res) {
       return res.status(404).json({ error: 'Книга не найдена' });
     }
 
-    const book = bookResult.rows[0];
-    const isFirstOpen = book.status === 'not_started';
-
     const updateResult = await pool.query(
       `UPDATE books
        SET current_page = $1,
@@ -137,17 +133,52 @@ async function updateProgress(req, res) {
       [currentPage, totalPages || null, req.params.id]
     );
 
-    // Записываем сессию чтения для статистики (одна запись на каждое обновление прогресса)
-    const pagesRead = Math.max(0, currentPage - book.current_page);
-    await pool.query(
-      `INSERT INTO reading_sessions (book_id, user_id, started_at, ended_at, pages_read)
-       VALUES ($1, $2, NOW(), NOW(), $3)`,
-      [req.params.id, req.userId, pagesRead]
-    );
-
     res.json(formatBook(updateResult.rows[0]));
   } catch (err) {
     console.error('Ошибка обновления прогресса:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// Открытие сессии чтения — вызывается когда пользователь открывает читалку.
+// Возвращает id созданной сессии, который Flutter сохраняет и передаёт при закрытии.
+async function startReadingSession(req, res) {
+  try {
+    const result = await pool.query(
+      `INSERT INTO reading_sessions (book_id, user_id, started_at)
+       VALUES ($1, $2, NOW())
+       RETURNING id`,
+      [req.params.id, req.userId]
+    );
+
+    res.json({ sessionId: result.rows[0].id });
+  } catch (err) {
+    console.error('Ошибка открытия сессии чтения:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// Закрытие сессии чтения — вызывается когда пользователь выходит из читалки.
+// Проставляет ended_at, после чего разница (ended_at - started_at) используется
+// для подсчёта общего времени чтения в статистике.
+async function endReadingSession(req, res) {
+  const { sessionId } = req.body;
+
+  if (!sessionId) {
+    return res.status(400).json({ error: 'sessionId обязателен' });
+  }
+
+  try {
+    await pool.query(
+      `UPDATE reading_sessions
+       SET ended_at = NOW()
+       WHERE id = $1 AND user_id = $2 AND ended_at IS NULL`,
+      [sessionId, req.userId]
+    );
+
+    res.json({ message: 'Сессия закрыта' });
+  } catch (err) {
+    console.error('Ошибка закрытия сессии чтения:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
@@ -230,6 +261,8 @@ module.exports = {
   getBookById,
   downloadBookFile,
   updateProgress,
+  startReadingSession,
+  endReadingSession,
   finishBook,
   deleteBook,
 };
