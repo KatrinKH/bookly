@@ -2,16 +2,12 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
-import 'package:epub_view/epub_view.dart';
+import 'package:flutter_epub_viewer/flutter_epub_viewer.dart';
 import '../models/book.dart';
 import '../services/book_service.dart';
 
-// Экран чтения книги.
-// EPUB: простая вертикальная прокрутка через epub_view,
-//        файл кэшируется локально при первом открытии.
-// PDF: вертикальный скролл через SfPdfViewer, страница сохраняется на backend.
-// При входе открывает сессию чтения, при выходе закрывает — для статистики часов.
 class ReaderScreen extends StatefulWidget {
   final Book book;
 
@@ -24,17 +20,17 @@ class ReaderScreen extends StatefulWidget {
 class _ReaderScreenState extends State<ReaderScreen> {
   final BookService _bookService = BookService();
 
-  // PDF
   late PdfViewerController? _pdfController;
   String? _fileUrl;
 
-  // EPUB
-  EpubController? _epubController;
+  final EpubController _epubController = EpubController();
+  String? _epubLocalPath;
 
-  // Состояние
   bool _isLoading = true;
   bool _isDownloading = false;
   int? _sessionId;
+
+  String get _progressKey => 'epub_progress_${widget.book.id}';
 
   @override
   void initState() {
@@ -44,14 +40,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
     _startSession();
   }
 
-  // Открываем сессию чтения при входе в читалку
   Future<void> _startSession() async {
     try {
       final sessionId = await _bookService.startReadingSession(widget.book.id);
       _sessionId = sessionId;
-    } catch (_) {
-      // Не критично: чтение продолжается, просто время не попадёт в статистику
-    }
+    } catch (_) {}
   }
 
   Future<void> _loadFile() async {
@@ -89,15 +82,35 @@ class _ReaderScreenState extends State<ReaderScreen> {
     if (mounted) {
       setState(() {
         _isDownloading = false;
-        _epubController = EpubController(
-          document: EpubDocument.openFile(File(localPath)),
-        );
+        _epubLocalPath = localPath;
         _isLoading = false;
       });
     }
   }
 
-  // Сохраняет текущую страницу PDF на backend
+  // Восстанавливаем позицию через toProgressPercentage
+  Future<void> _restorePosition() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedProgress = prefs.getDouble(_progressKey);
+      if (savedProgress != null && savedProgress > 0) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        _epubController.toProgressPercentage(savedProgress);
+      }
+    } catch (_) {}
+  }
+
+  // Сохраняем прогресс при каждом перемещении.
+  // Это единственный надёжный способ — dispose() нельзя использовать
+  // потому что WebView уже уничтожен к тому моменту.
+  void _savePosition(EpubLocation location) {
+    try {
+      SharedPreferences.getInstance().then((prefs) {
+        prefs.setDouble(_progressKey, location.progress);
+      });
+    } catch (_) {}
+  }
+
   Future<void> _savePdfProgress(int currentPage, {int? totalPages}) async {
     try {
       await _bookService.updateProgress(
@@ -155,27 +168,29 @@ class _ReaderScreenState extends State<ReaderScreen> {
   }
 
   Widget _buildEpubViewer() {
-    return EpubView(
-      controller: _epubController!,
-      onChapterChanged: (value) {
-        // Сохраняем номер главы как прогресс чтения
-        if (value?.chapterNumber != null) {
-          _bookService.updateProgress(
-            bookId: widget.book.id,
-            currentPage: value!.chapterNumber!,
-          ).catchError((_) {});
-        }
+    return EpubViewer(
+      epubSource: EpubSource.fromFile(File(_epubLocalPath!)),
+      epubController: _epubController,
+      displaySettings: EpubDisplaySettings(
+        flow: EpubFlow.scrolled,
+        snap: false,
+      ),
+      onEpubLoaded: () async {
+        await _restorePosition();
+      },
+      onRelocated: (location) {
+        _savePosition(location);
       },
     );
   }
 
   @override
   void dispose() {
-    // Закрываем сессию чтения — время попадёт в статистику
+    // НЕ вызываем getCurrentLocation() здесь — WebView уже уничтожен.
+    // Позиция сохраняется через onRelocated при каждом движении.
     if (_sessionId != null) {
       _bookService.endReadingSession(widget.book.id, _sessionId!).catchError((_) {});
     }
-    _epubController?.dispose();
     super.dispose();
   }
 }
