@@ -11,6 +11,9 @@ dependencies:
     sdk: flutter
   cupertino_icons: ^1.0.8
 
+  # Шрифты Google Fonts (Lobster для текста, Pacifico для бренда)
+  google_fonts: ^6.2.1
+
   # Сетевые запросы к backend API
   http: ^1.2.2
   dio: ^5.7.0
