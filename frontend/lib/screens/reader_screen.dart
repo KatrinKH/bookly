@@ -7,10 +7,11 @@ import 'package:epub_view/epub_view.dart';
 import '../models/book.dart';
 import '../services/book_service.dart';
 
-// Экран чтения книги. В зависимости от формата (pdf/epub) показывает
-// соответствующий просмотрщик и автоматически сохраняет прогресс чтения.
-// При входе открывает сессию чтения, при выходе закрывает — это позволяет
-// считать реальное время чтения для статистики.
+// Экран чтения книги.
+// EPUB: простая вертикальная прокрутка через epub_view,
+//        файл кэшируется локально при первом открытии.
+// PDF: вертикальный скролл через SfPdfViewer, страница сохраняется на backend.
+// При входе открывает сессию чтения, при выходе закрывает — для статистики часов.
 class ReaderScreen extends StatefulWidget {
   final Book book;
 
@@ -22,18 +23,24 @@ class ReaderScreen extends StatefulWidget {
 
 class _ReaderScreenState extends State<ReaderScreen> {
   final BookService _bookService = BookService();
+
+  // PDF
   late PdfViewerController? _pdfController;
-  EpubController? _epubController;
   String? _fileUrl;
+
+  // EPUB
+  EpubController? _epubController;
+
+  // Состояние
   bool _isLoading = true;
   bool _isDownloading = false;
-  int? _sessionId; // id открытой сессии чтения для закрытия при выходе
+  int? _sessionId;
 
   @override
   void initState() {
     super.initState();
     _pdfController = widget.book.fileFormat == 'pdf' ? PdfViewerController() : null;
-    _loadFileUrl();
+    _loadFile();
     _startSession();
   }
 
@@ -43,72 +50,62 @@ class _ReaderScreenState extends State<ReaderScreen> {
       final sessionId = await _bookService.startReadingSession(widget.book.id);
       _sessionId = sessionId;
     } catch (_) {
-      // Не критично: если сессия не открылась, чтение продолжается,
-      // просто это время не попадёт в статистику
+      // Не критично: чтение продолжается, просто время не попадёт в статистику
     }
   }
 
-  Future<void> _loadFileUrl() async {
-    final url = await _bookService.getBookFileUrl(widget.book.id);
-
+  Future<void> _loadFile() async {
     if (widget.book.fileFormat == 'epub') {
-      final tempDir = await getTemporaryDirectory();
-      final localPath = '${tempDir.path}/book_${widget.book.id}.epub';
-      final isCached = File(localPath).existsSync();
+      await _loadEpub();
+    } else {
+      final url = await _bookService.getBookFileUrl(widget.book.id);
+      setState(() {
+        _fileUrl = url;
+        _isLoading = false;
+      });
+    }
+  }
 
-      if (!isCached && mounted) {
-        setState(() => _isDownloading = true);
-      }
+  Future<void> _loadEpub() async {
+    final tempDir = await getTemporaryDirectory();
+    final localPath = '${tempDir.path}/book_${widget.book.id}.epub';
+    final isCached = File(localPath).existsSync();
 
-      final path = await _downloadEpubToTempFile();
+    if (!isCached && mounted) {
+      setState(() => _isDownloading = true);
+    }
 
-      if (mounted) setState(() => _isDownloading = false);
+    if (!isCached) {
+      final downloadUrl = _bookService.getBookFileDownloadUrl(widget.book.id);
+      final token = await _bookService.getToken();
 
-      _epubController = EpubController(
-        document: EpubDocument.openFile(File(path)),
+      await Dio().download(
+        downloadUrl,
+        localPath,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
       );
     }
 
-    setState(() {
-      _fileUrl = url;
-      _isLoading = false;
-    });
-  }
-
-  Future<String> _downloadEpubToTempFile() async {
-    final tempDir = await getTemporaryDirectory();
-    final localPath = '${tempDir.path}/book_${widget.book.id}.epub';
-
-    // Если файл уже скачан ранее — используем кэш, не скачиваем повторно
-    if (File(localPath).existsSync()) {
-      return localPath;
+    if (mounted) {
+      setState(() {
+        _isDownloading = false;
+        _epubController = EpubController(
+          document: EpubDocument.openFile(File(localPath)),
+        );
+        _isLoading = false;
+      });
     }
-
-    final downloadUrl = _bookService.getBookFileDownloadUrl(widget.book.id);
-    final token = await _bookService.getToken();
-
-    await Dio().download(
-      downloadUrl,
-      localPath,
-      options: Options(
-        headers: {'Authorization': 'Bearer $token'},
-      ),
-    );
-
-    return localPath;
   }
 
-  // Сохраняет текущую страницу на backend при смене страницы
-  Future<void> _saveProgress(int currentPage, {int? totalPages}) async {
+  // Сохраняет текущую страницу PDF на backend
+  Future<void> _savePdfProgress(int currentPage, {int? totalPages}) async {
     try {
       await _bookService.updateProgress(
         bookId: widget.book.id,
         currentPage: currentPage,
         totalPages: totalPages,
       );
-    } catch (_) {
-      // Намеренно игнорируем ошибку сохранения прогресса, чтобы не мешать чтению
-    }
+    } catch (_) {}
   }
 
   @override
@@ -148,7 +145,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
       _fileUrl!,
       controller: _pdfController,
       onPageChanged: (details) {
-        _saveProgress(
+        _savePdfProgress(
           details.newPageNumber,
           totalPages: _pdfController?.pageCount,
         );
@@ -161,8 +158,12 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return EpubView(
       controller: _epubController!,
       onChapterChanged: (value) {
+        // Сохраняем номер главы как прогресс чтения
         if (value?.chapterNumber != null) {
-          _saveProgress(value!.chapterNumber!);
+          _bookService.updateProgress(
+            bookId: widget.book.id,
+            currentPage: value!.chapterNumber!,
+          ).catchError((_) {});
         }
       },
     );
@@ -170,8 +171,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
-    // Закрываем сессию чтения при выходе из читалки —
-    // разница ended_at - started_at попадёт в статистику часов чтения
+    // Закрываем сессию чтения — время попадёт в статистику
     if (_sessionId != null) {
       _bookService.endReadingSession(widget.book.id, _sessionId!).catchError((_) {});
     }
