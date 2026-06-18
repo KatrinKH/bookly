@@ -22,7 +22,12 @@ class StatsService {
     );
 
     final data = jsonDecode(response.body);
-    final List byPeriod = data['byPeriod'];
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось загрузить статистику (код ${response.statusCode})');
+    }
+
+    final List byPeriod = data['byPeriod'] ?? [];
     return byPeriod.map((json) => PeriodStat.fromJson(json)).toList();
   }
 
@@ -34,6 +39,11 @@ class StatsService {
     );
 
     final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось загрузить жанры (код ${response.statusCode})');
+    }
+
     final List topGenres = data['topGenres'] ?? [];
     return topGenres.map((json) => GenreStat.fromJson(json)).toList();
   }
@@ -45,6 +55,12 @@ class StatsService {
       headers: headers,
     );
 
-    return OverallStats.fromJson(jsonDecode(response.body));
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось загрузить сводную статистику (код ${response.statusCode})');
+    }
+
+    return OverallStats.fromJson(data);
   }
 }
