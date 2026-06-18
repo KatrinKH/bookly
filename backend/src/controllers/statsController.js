@@ -20,20 +20,20 @@ async function getStats(req, res) {
       return res.json(await getSeasonStats(req.userId));
     }
 
-    const truncUnit = PERIOD_MAP[period];
+    const truncUnit = PERIOD_MAP[period]; // 'month' или 'year' — оба значения фиксированы и безопасны
 
     const finishedBooksResult = await pool.query(
       `SELECT
-         date_trunc($1, finished_at) AS period_start,
+         date_trunc('${truncUnit}', finished_at) AS period_start,
          COUNT(*) AS books_finished,
          COALESCE(AVG(rating), 0) AS avg_rating,
          COALESCE(SUM(total_pages), 0) AS total_pages,
          COUNT(*) FILTER (WHERE liked = true) AS liked_count
        FROM books
-       WHERE user_id = $2 AND status = 'finished' AND finished_at IS NOT NULL
+       WHERE user_id = $1 AND status = 'finished' AND finished_at IS NOT NULL
        GROUP BY period_start
        ORDER BY period_start DESC`,
-      [truncUnit, req.userId]
+      [req.userId]
     );
 
     const genreResult = await pool.query(
