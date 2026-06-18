@@ -8,8 +8,9 @@ import '../models/book.dart';
 import '../services/book_service.dart';
 
 // Экран чтения книги. В зависимости от формата (pdf/epub) показывает
-// соответствующий просмотрщик и автоматически сохраняет прогресс чтения
-// на backend, откуда дата начала/конца чтения попадает в статистику.
+// соответствующий просмотрщик и автоматически сохраняет прогресс чтения.
+// При входе открывает сессию чтения, при выходе закрывает — это позволяет
+// считать реальное время чтения для статистики.
 class ReaderScreen extends StatefulWidget {
   final Book book;
 
@@ -25,21 +26,31 @@ class _ReaderScreenState extends State<ReaderScreen> {
   EpubController? _epubController;
   String? _fileUrl;
   bool _isLoading = true;
+  int? _sessionId; // id открытой сессии чтения для закрытия при выходе
 
   @override
   void initState() {
     super.initState();
     _pdfController = widget.book.fileFormat == 'pdf' ? PdfViewerController() : null;
     _loadFileUrl();
+    _startSession();
+  }
+
+  // Открываем сессию чтения при входе в читалку
+  Future<void> _startSession() async {
+    try {
+      final sessionId = await _bookService.startReadingSession(widget.book.id);
+      _sessionId = sessionId;
+    } catch (_) {
+      // Не критично: если сессия не открылась, чтение продолжается,
+      // просто это время не попадёт в статистику
+    }
   }
 
   Future<void> _loadFileUrl() async {
     final url = await _bookService.getBookFileUrl(widget.book.id);
 
     if (widget.book.fileFormat == 'epub') {
-      // epub_view не умеет открывать файлы напрямую по сетевому URL,
-      // поэтому сначала скачиваем EPUB во временную папку устройства,
-      // а затем открываем уже локальный файл.
       final localPath = await _downloadEpubToTempFile(url);
       _epubController = EpubController(
         document: EpubDocument.openFile(File(localPath)),
@@ -55,14 +66,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
   Future<String> _downloadEpubToTempFile(String url) async {
     final tempDir = await getTemporaryDirectory();
     final localPath = '${tempDir.path}/book_${widget.book.id}.epub';
-
     await Dio().download(url, localPath);
-
     return localPath;
   }
 
-  // Сохраняет текущую страницу на backend.
-  // Вызывается при смене страницы (PDF) и при выходе с экрана.
+  // Сохраняет текущую страницу на backend при смене страницы
   Future<void> _saveProgress(int currentPage, {int? totalPages}) async {
     try {
       await _bookService.updateProgress(
@@ -105,8 +113,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
     return EpubView(
       controller: _epubController!,
       onChapterChanged: (value) {
-        // Для EPUB фиксируем номер главы как условную "страницу" прогресса,
-        // так как реальная пагинация в EPUB зависит от размера экрана
         if (value?.chapterNumber != null) {
           _saveProgress(value!.chapterNumber!);
         }
@@ -116,6 +122,11 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
+    // Закрываем сессию чтения при выходе из читалки —
+    // разница ended_at - started_at попадёт в статистику часов чтения
+    if (_sessionId != null) {
+      _bookService.endReadingSession(widget.book.id, _sessionId!).catchError((_) {});
+    }
     _epubController?.dispose();
     super.dispose();
   }

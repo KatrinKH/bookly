@@ -87,6 +87,39 @@ class BookService {
     return '${ApiConfig.baseUrl}/books/$bookId/file?token=$token';
   }
 
+  // Открывает сессию чтения при входе в читалку.
+  // Возвращает sessionId, который нужно передать в endReadingSession при выходе.
+  Future<int> startReadingSession(int bookId) async {
+    final headers = await _authHeaders();
+    headers['Content-Type'] = 'application/json';
+
+    final response = await http.post(
+      Uri.parse('${ApiConfig.baseUrl}/books/$bookId/session/start'),
+      headers: headers,
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception(data['error'] ?? 'Не удалось открыть сессию чтения');
+    }
+
+    return data['sessionId'];
+  }
+
+  // Закрывает сессию чтения при выходе из читалки.
+  // После закрытия разница ended_at - started_at идёт в статистику часов чтения.
+  Future<void> endReadingSession(int bookId, int sessionId) async {
+    final headers = await _authHeaders();
+    headers['Content-Type'] = 'application/json';
+
+    await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/books/$bookId/session/end'),
+      headers: headers,
+      body: jsonEncode({'sessionId': sessionId}),
+    );
+  }
+
   // Обновление текущей страницы при чтении.
   // Backend автоматически фиксирует дату начала чтения при первом вызове.
   Future<Book> updateProgress({

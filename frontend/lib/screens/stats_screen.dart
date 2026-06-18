@@ -143,11 +143,16 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildOverallCards(OverallStats stats) {
+    final hours = stats.totalReadingHours;
+    final hoursLabel = hours < 1
+        ? '${(hours * 60).round()} мин'
+        : '${hours.toStringAsFixed(1)} ч';
+
     return Row(
       children: [
         Expanded(child: _StatCard(label: 'Прочитано книг', value: '${stats.totalFinished}')),
         const SizedBox(width: 12),
-        Expanded(child: _StatCard(label: 'Страниц всего', value: '${stats.totalPagesRead}')),
+        Expanded(child: _StatCard(label: 'Часов чтения', value: hoursLabel)),
       ],
     );
   }

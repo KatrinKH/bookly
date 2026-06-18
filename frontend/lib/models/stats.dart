@@ -6,7 +6,7 @@ class PeriodStat {
   final int? year;
   final int booksFinished;
   final double avgRating;
-  final int totalPages;
+  final double readingHours; // часы чтения из сессий (вместо страниц)
   final int likedCount;
 
   PeriodStat({
@@ -15,7 +15,7 @@ class PeriodStat {
     this.year,
     required this.booksFinished,
     required this.avgRating,
-    required this.totalPages,
+    required this.readingHours,
     required this.likedCount,
   });
 
@@ -26,7 +26,7 @@ class PeriodStat {
       year: json['year'],
       booksFinished: json['booksFinished'] ?? 0,
       avgRating: double.tryParse(json['avgRating'].toString()) ?? 0,
-      totalPages: json['totalPages'] ?? 0,
+      readingHours: double.tryParse(json['readingHours'].toString()) ?? 0,
       likedCount: json['likedCount'] ?? 0,
     );
   }
@@ -64,14 +64,14 @@ class GenreStat {
 class OverallStats {
   final int totalFinished;
   final int currentlyReading;
-  final int totalPagesRead;
+  final double totalReadingHours; // суммарное время чтения в часах
   final double avgRating;
   final int likedCount;
 
   OverallStats({
     required this.totalFinished,
     required this.currentlyReading,
-    required this.totalPagesRead,
+    required this.totalReadingHours,
     required this.avgRating,
     required this.likedCount,
   });
@@ -80,7 +80,7 @@ class OverallStats {
     return OverallStats(
       totalFinished: json['totalFinished'] ?? 0,
       currentlyReading: json['currentlyReading'] ?? 0,
-      totalPagesRead: json['totalPagesRead'] ?? 0,
+      totalReadingHours: double.tryParse(json['totalReadingHours'].toString()) ?? 0,
       avgRating: double.tryParse(json['avgRating'].toString()) ?? 0,
       likedCount: json['likedCount'] ?? 0,
     );
