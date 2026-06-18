@@ -50,12 +50,12 @@ class BookCard extends StatelessWidget {
                 width: 56,
                 height: 80,
                 decoration: BoxDecoration(
-                  color: Colors.indigo.shade100,
+                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   book.fileFormat == 'pdf' ? Icons.picture_as_pdf : Icons.menu_book,
-                  color: Colors.indigo,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
               ),
               const SizedBox(width: 16),
@@ -65,14 +65,18 @@ class BookCard extends StatelessWidget {
                   children: [
                     Text(
                       book.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (book.author != null)
                       Text(
                         book.author!,
-                        style: TextStyle(color: Colors.grey.shade600),
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Colors.grey.shade600,
+                            ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -87,17 +91,19 @@ class BookCard extends StatelessWidget {
                           ),
                           child: Text(
                             _statusLabel(),
-                            style: TextStyle(
-                              color: _statusColor(),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: _statusColor(),
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ),
                         if (book.rating != null) ...[
                           const SizedBox(width: 8),
                           Icon(Icons.star, size: 14, color: Colors.amber.shade700),
-                          Text(' ${book.rating}', style: const TextStyle(fontSize: 12)),
+                          Text(
+                            ' ${book.rating}',
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
                         ],
                       ],
                     ),
