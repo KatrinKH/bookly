@@ -13,6 +13,7 @@ class Book {
   final DateTime? finishedAt;
   final int? rating; // 1..5
   final bool? liked;
+  final bool hasCover; // есть ли загруженная/извлечённая обложка
   final DateTime createdAt;
 
   Book({
@@ -28,6 +29,7 @@ class Book {
     this.finishedAt,
     this.rating,
     this.liked,
+    this.hasCover = false,
     required this.createdAt,
   });
 
@@ -45,6 +47,7 @@ class Book {
       finishedAt: json['finishedAt'] != null ? DateTime.parse(json['finishedAt']) : null,
       rating: json['rating'],
       liked: json['liked'],
+      hasCover: json['hasCover'] ?? false,
       createdAt: DateTime.parse(json['createdAt']),
     );
   }

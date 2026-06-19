@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 import '../models/book.dart';
 import '../models/note.dart';
 import '../services/book_service.dart';
 import '../services/note_service.dart';
+import '../widgets/book_cover_image.dart';
 import 'reader_screen.dart';
 
 // Экран с подробной информацией о книге: статус, прогресс, заметки и оценка.
@@ -184,6 +186,35 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Center(
+            child: Stack(
+              children: [
+                BookCoverImage(
+                  book: book,
+                  width: 140,
+                  height: 200,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                Positioned(
+                  bottom: 4,
+                  right: 4,
+                  child: Material(
+                    color: Theme.of(context).colorScheme.primary,
+                    shape: const CircleBorder(),
+                    child: InkWell(
+                      onTap: _changeCover,
+                      customBorder: const CircleBorder(),
+                      child: const Padding(
+                        padding: EdgeInsets.all(6),
+                        child: Icon(Icons.edit, size: 16, color: Colors.white),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
           if (book.author != null)
             Text(book.author!, style: TextStyle(color: Colors.grey.shade600, fontSize: 16)),
           const SizedBox(height: 8),
@@ -249,6 +280,25 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _changeCover() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    if (result == null || result.files.single.path == null) return;
+
+    try {
+      await _bookService.updateCover(
+        bookId: widget.bookId,
+        imagePath: result.files.single.path!,
+      );
+      _loadData();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось сменить обложку: $e')),
+        );
+      }
+    }
   }
 
   String _formatDate(DateTime date) {

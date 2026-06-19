@@ -94,6 +94,30 @@ class BookService {
     return '${ApiConfig.baseUrl}/books/$bookId/file';
   }
 
+  // URL для отображения обложки книги в Image.network с заголовком авторизации
+  Future<Map<String, String>> getCoverHeaders() => _authHeaders();
+
+  String getCoverUrl(int bookId) {
+    return '${ApiConfig.baseUrl}/books/$bookId/cover';
+  }
+
+  // Замена обложки книги на новое изображение, выбранное пользователем
+  Future<Book> updateCover({required int bookId, required String imagePath}) async {
+    final token = await _storage.getToken();
+
+    final formData = FormData.fromMap({
+      'cover': await MultipartFile.fromFile(imagePath),
+    });
+
+    final response = await _dio.patch(
+      '${ApiConfig.baseUrl}/books/$bookId/cover',
+      data: formData,
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+
+    return Book.fromJson(response.data);
+  }
+
   // Возвращает токен авторизации — используется в читалке при скачивании файла
   Future<String?> getToken() => _storage.getToken();
 

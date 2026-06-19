@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/book.dart';
+import 'book_cover_image.dart';
 
 // Карточка книги в списке библиотеки.
 // Показывает обложку-заглушку, название, автора, статус и прогресс чтения.
@@ -46,18 +47,7 @@ class BookCard extends StatelessWidget {
           padding: const EdgeInsets.all(12),
           child: Row(
             children: [
-              Container(
-                width: 56,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.secondary.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(
-                  book.fileFormat == 'pdf' ? Icons.picture_as_pdf : Icons.menu_book,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
+              BookCoverImage(book: book, width: 56, height: 80),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(

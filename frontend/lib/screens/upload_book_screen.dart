@@ -1,8 +1,11 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../services/book_service.dart';
 
-// Экран добавления новой книги: выбор файла PDF/EPUB и заполнение метаданных
+// Экран добавления новой книги: выбор файла PDF/EPUB, заполнение метаданных
+// и опциональный выбор своей обложки. Если обложка не выбрана и файл EPUB —
+// backend попробует извлечь обложку из самого файла автоматически.
 class UploadBookScreen extends StatefulWidget {
   const UploadBookScreen({super.key});
 
@@ -19,6 +22,7 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
 
   String? _filePath;
   String? _fileName;
+  String? _coverPath;
   bool _isUploading = false;
   String? _errorMessage;
 
@@ -32,11 +36,20 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
       setState(() {
         _filePath = result.files.single.path;
         _fileName = result.files.single.name;
-        // Если название не заполнено, подставляем имя файла без расширения
         if (_titleController.text.isEmpty) {
           _titleController.text = _fileName!.replaceAll(RegExp(r'\.(pdf|epub)$', caseSensitive: false), '');
         }
       });
+    }
+  }
+
+  Future<void> _pickCover() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      setState(() => _coverPath = result.files.single.path);
     }
   }
 
@@ -58,6 +71,7 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
         author: _authorController.text.trim().isEmpty ? null : _authorController.text.trim(),
         genre: _genreController.text.trim().isEmpty ? null : _genreController.text.trim(),
         filePath: _filePath!,
+        coverPath: _coverPath,
       );
 
       if (!mounted) return;
@@ -86,6 +100,8 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
                 label: Text(_fileName ?? 'Выбрать файл (PDF или EPUB)'),
                 style: OutlinedButton.styleFrom(padding: const EdgeInsets.all(16)),
               ),
+              const SizedBox(height: 20),
+              _buildCoverPicker(),
               const SizedBox(height: 20),
               TextFormField(
                 controller: _titleController,
@@ -133,6 +149,60 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  // Превью выбранной обложки + кнопка выбора/смены.
+  // Если обложка не выбрана — поясняем, что для EPUB она попробует извлечься сама.
+  Widget _buildCoverPicker() {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: _pickCover,
+          child: Container(
+            width: 80,
+            height: 110,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(8),
+              color: Theme.of(context).colorScheme.secondary.withOpacity(0.2),
+              image: _coverPath != null
+                  ? DecorationImage(image: FileImage(File(_coverPath!)), fit: BoxFit.cover)
+                  : null,
+            ),
+            child: _coverPath == null
+                ? Icon(Icons.add_photo_alternate_outlined,
+                    color: Theme.of(context).colorScheme.primary)
+                : null,
+          ),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                _coverPath != null ? 'Обложка выбрана' : 'Обложка (опционально)',
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                _coverPath != null
+                    ? 'Нажмите, чтобы выбрать другую'
+                    : 'Для EPUB обложка попробует извлечься из файла автоматически',
+                style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+              ),
+              if (_coverPath != null) ...[
+                const SizedBox(height: 6),
+                TextButton(
+                  onPressed: () => setState(() => _coverPath = null),
+                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                  child: const Text('Убрать'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ],
     );
   }
 
