@@ -1,8 +1,12 @@
 const path = require('path');
 const fs = require('fs');
 const pool = require('../config/db');
+const { extractEpubCover, saveCoverToFile } = require('../utils/epubCover');
+const { coversDir } = require('../middleware/upload');
 
-// Загрузка новой книги (PDF/EPUB) в библиотеку пользователя
+// Загрузка новой книги (PDF/EPUB) в библиотеку пользователя.
+// Если пользователь не приложил свою обложку и файл в формате EPUB,
+// обложка автоматически извлекается из самого файла книги.
 async function uploadBook(req, res) {
   const { title, author, genre } = req.body;
 
@@ -18,6 +22,21 @@ async function uploadBook(req, res) {
   const coverFile = req.files.cover ? req.files.cover[0] : null;
   const fileFormat = path.extname(bookFile.originalname).toLowerCase().replace('.', '');
 
+  let coverPath = coverFile ? coverFile.path : null;
+
+  // Если пользователь не загрузил свою обложку — пробуем извлечь из EPUB
+  if (!coverPath && fileFormat === 'epub') {
+    try {
+      const extracted = await extractEpubCover(bookFile.path);
+      if (extracted) {
+        const baseName = path.basename(bookFile.filename, path.extname(bookFile.filename));
+        coverPath = saveCoverToFile(extracted, coversDir, `${baseName}-cover`);
+      }
+    } catch (err) {
+      console.error('Извлечение обложки не удалось, продолжаем без неё:', err.message);
+    }
+  }
+
   try {
     const result = await pool.query(
       `INSERT INTO books (user_id, title, author, file_path, file_format, cover_path, genre)
@@ -29,7 +48,7 @@ async function uploadBook(req, res) {
         author || null,
         bookFile.path,
         fileFormat,
-        coverFile ? coverFile.path : null,
+        coverPath,
         genre || null,
       ]
     );
@@ -37,6 +56,65 @@ async function uploadBook(req, res) {
     res.status(201).json(formatBook(result.rows[0]));
   } catch (err) {
     console.error('Ошибка загрузки книги:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// Замена обложки книги — пользователь загружает новое изображение
+async function updateCover(req, res) {
+  if (!req.file) {
+    return res.status(400).json({ error: 'Файл обложки обязателен' });
+  }
+
+  try {
+    const bookResult = await pool.query(
+      'SELECT cover_path FROM books WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+
+    if (bookResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Книга не найдена' });
+    }
+
+    const oldCoverPath = bookResult.rows[0].cover_path;
+
+    const result = await pool.query(
+      'UPDATE books SET cover_path = $1 WHERE id = $2 RETURNING *',
+      [req.file.path, req.params.id]
+    );
+
+    // Удаляем старую обложку, если она была
+    if (oldCoverPath && fs.existsSync(oldCoverPath)) {
+      fs.unlinkSync(oldCoverPath);
+    }
+
+    res.json(formatBook(result.rows[0]));
+  } catch (err) {
+    console.error('Ошибка замены обложки:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// Отдаёт файл обложки книги
+async function downloadCover(req, res) {
+  try {
+    const result = await pool.query(
+      'SELECT cover_path FROM books WHERE id = $1 AND user_id = $2',
+      [req.params.id, req.userId]
+    );
+
+    if (result.rows.length === 0 || !result.rows[0].cover_path) {
+      return res.status(404).json({ error: 'Обложка не найдена' });
+    }
+
+    const coverPath = result.rows[0].cover_path;
+    if (!fs.existsSync(coverPath)) {
+      return res.status(404).json({ error: 'Файл обложки отсутствует на сервере' });
+    }
+
+    res.sendFile(path.resolve(coverPath));
+  } catch (err) {
+    console.error('Ошибка отдачи обложки:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
@@ -251,12 +329,15 @@ function formatBook(row) {
     finishedAt: row.finished_at,
     rating: row.rating,
     liked: row.liked,
+    hasCover: !!row.cover_path,
     createdAt: row.created_at,
   };
 }
 
 module.exports = {
   uploadBook,
+  updateCover,
+  downloadCover,
   getBooks,
   getBookById,
   downloadBookFile,
