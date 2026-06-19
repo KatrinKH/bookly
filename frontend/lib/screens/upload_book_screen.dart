@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../services/book_service.dart';
 
 // Экран добавления новой книги: выбор файла PDF/EPUB, заполнение метаданных
@@ -44,12 +45,14 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
   }
 
   Future<void> _pickCover() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.image,
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85,
     );
 
-    if (result != null && result.files.single.path != null) {
-      setState(() => _coverPath = result.files.single.path);
+    if (pickedFile != null) {
+      setState(() => _coverPath = pickedFile.path);
     }
   }
 

@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/book.dart';
 import '../models/note.dart';
 import '../services/book_service.dart';
@@ -283,13 +283,17 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
   }
 
   Future<void> _changeCover() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image);
-    if (result == null || result.files.single.path == null) return;
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 85, // сжимаем, чтобы не грузить на сервер огромные фото с камеры
+    );
+    if (pickedFile == null) return;
 
     try {
       await _bookService.updateCover(
         bookId: widget.bookId,
-        imagePath: result.files.single.path!,
+        imagePath: pickedFile.path,
       );
       _loadData();
     } catch (e) {

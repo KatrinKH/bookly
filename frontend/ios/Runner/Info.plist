@@ -45,5 +45,7 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Bookly нужен доступ к фото, чтобы вы могли выбрать обложку для книги</string>
 </dict>
 </plist>
