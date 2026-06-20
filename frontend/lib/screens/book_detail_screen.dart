@@ -369,7 +369,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               } catch (e) {
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Не удалось сохранить изменения: $e')),
+                    SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
                   );
                 }
               }

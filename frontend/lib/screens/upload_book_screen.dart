@@ -80,7 +80,18 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
       if (!mounted) return;
       Navigator.of(context).pop(true);
     } catch (e) {
-      setState(() => _errorMessage = 'Ошибка загрузки: $e');
+      final message = e.toString().replaceFirst('Exception: ', '');
+      setState(() => _errorMessage = message);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red.shade700,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
     } finally {
       if (mounted) setState(() => _isUploading = false);
     }

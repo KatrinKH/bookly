@@ -21,7 +21,9 @@ class BookService {
     return {'Authorization': 'Bearer $token'};
   }
 
-  // Загрузка новой книги (файл PDF/EPUB + опционально обложка)
+  // Загрузка новой книги (файл PDF/EPUB + опционально обложка).
+  // Backend отклоняет дубликаты (книга с тем же названием и автором у пользователя)
+  // с кодом 409 — это пробрасывается как понятное сообщение через DioException.
   Future<Book> uploadBook({
     required String title,
     String? author,
@@ -39,13 +41,20 @@ class BookService {
       if (coverPath != null) 'cover': await MultipartFile.fromFile(coverPath),
     });
 
-    final response = await _dio.post(
-      '${ApiConfig.baseUrl}/books',
-      data: formData,
-      options: Options(headers: {'Authorization': 'Bearer $token'}),
-    );
+    try {
+      final response = await _dio.post(
+        '${ApiConfig.baseUrl}/books',
+        data: formData,
+        options: Options(headers: {'Authorization': 'Bearer $token'}),
+      );
 
-    return Book.fromJson(response.data);
+      return Book.fromJson(response.data);
+    } on DioException catch (e) {
+      final errorMessage = e.response?.data is Map
+          ? e.response?.data['error']
+          : null;
+      throw Exception(errorMessage ?? 'Не удалось загрузить книгу');
+    }
   }
 
   // Получение списка книг, опционально с фильтром по статусу

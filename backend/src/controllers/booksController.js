@@ -7,6 +7,8 @@ const { coversDir } = require('../middleware/upload');
 // Загрузка новой книги (PDF/EPUB) в библиотеку пользователя.
 // Если пользователь не приложил свою обложку и файл в формате EPUB,
 // обложка автоматически извлекается из самого файла книги.
+// Перед сохранением проверяется, нет ли у пользователя уже такой же книги
+// (совпадение названия и автора без учёта регистра и лишних пробелов).
 async function uploadBook(req, res) {
   const { title, author, genre } = req.body;
 
@@ -21,6 +23,34 @@ async function uploadBook(req, res) {
   const bookFile = req.files.book[0];
   const coverFile = req.files.cover ? req.files.cover[0] : null;
   const fileFormat = path.extname(bookFile.originalname).toLowerCase().replace('.', '');
+
+  // Проверяем дубликат до сохранения файла и извлечения обложки,
+  // чтобы не тратить ресурсы и не оставлять файл-сироту при отказе.
+  try {
+    const duplicateCheck = await pool.query(
+      `SELECT id FROM books
+       WHERE user_id = $1
+         AND LOWER(TRIM(title)) = LOWER(TRIM($2))
+         AND LOWER(TRIM(COALESCE(author, ''))) = LOWER(TRIM(COALESCE($3, '')))`,
+      [req.userId, title, author || null]
+    );
+
+    if (duplicateCheck.rows.length > 0) {
+      // Загруженный файл уже сохранён middleware multer на диск до вызова контроллера —
+      // удаляем его, раз книга не будет создана.
+      if (fs.existsSync(bookFile.path)) fs.unlinkSync(bookFile.path);
+      if (coverFile && fs.existsSync(coverFile.path)) fs.unlinkSync(coverFile.path);
+
+      return res.status(409).json({
+        error: author
+          ? `Книга «${title}» автора ${author} уже есть в вашей библиотеке`
+          : `Книга «${title}» уже есть в вашей библиотеке`,
+      });
+    }
+  } catch (err) {
+    console.error('Ошибка проверки дубликата книги:', err);
+    return res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
 
   let coverPath = coverFile ? coverFile.path : null;
 
@@ -173,6 +203,42 @@ async function updateMetadata(req, res) {
   }
 
   try {
+    // Если меняется название или автор — нужно проверить, не получится ли
+    // в итоге дубликат другой книги пользователя. Для этого берём текущие
+    // значения книги и подставляем то, что реально меняется.
+    if (title !== undefined || author !== undefined) {
+      const currentResult = await pool.query(
+        'SELECT title, author FROM books WHERE id = $1 AND user_id = $2',
+        [req.params.id, req.userId]
+      );
+
+      if (currentResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Книга не найдена' });
+      }
+
+      const finalTitle = title !== undefined ? title.trim() : currentResult.rows[0].title;
+      const finalAuthor = author !== undefined
+        ? (author.trim() === '' ? null : author.trim())
+        : currentResult.rows[0].author;
+
+      const duplicateCheck = await pool.query(
+        `SELECT id FROM books
+         WHERE user_id = $1
+           AND id != $2
+           AND LOWER(TRIM(title)) = LOWER(TRIM($3))
+           AND LOWER(TRIM(COALESCE(author, ''))) = LOWER(TRIM(COALESCE($4, '')))`,
+        [req.userId, req.params.id, finalTitle, finalAuthor]
+      );
+
+      if (duplicateCheck.rows.length > 0) {
+        return res.status(409).json({
+          error: finalAuthor
+            ? `Книга «${finalTitle}» автора ${finalAuthor} уже есть в вашей библиотеке`
+            : `Книга «${finalTitle}» уже есть в вашей библиотеке`,
+        });
+      }
+    }
+
     const fields = [];
     const values = [];
     let paramIndex = 1;
