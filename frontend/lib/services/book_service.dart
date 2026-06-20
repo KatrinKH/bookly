@@ -209,11 +209,47 @@ class BookService {
     return Book.fromJson(data);
   }
 
+  // Изменение названия, автора и жанра книги.
+  // Передавай только те поля, которые нужно изменить (остальные останутся как были).
+  // Чтобы очистить автора/жанр — передай пустую строку.
+  Future<Book> updateMetadata({
+    required int bookId,
+    String? title,
+    String? author,
+    String? genre,
+  }) async {
+    final headers = await _authHeaders();
+    headers['Content-Type'] = 'application/json';
+
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/books/$bookId'),
+      headers: headers,
+      body: jsonEncode({
+        if (title != null) 'title': title,
+        if (author != null) 'author': author,
+        if (genre != null) 'genre': genre,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось изменить данные книги (код ${response.statusCode})');
+    }
+
+    return Book.fromJson(data);
+  }
+
   Future<void> deleteBook(int bookId) async {
     final headers = await _authHeaders();
-    await http.delete(
+    final response = await http.delete(
       Uri.parse('${ApiConfig.baseUrl}/books/$bookId'),
       headers: headers,
     );
+
+    if (response.statusCode != 200) {
+      final data = jsonDecode(response.body);
+      throw Exception(data['error'] ?? 'Не удалось удалить книгу (код ${response.statusCode})');
+    }
   }
 }

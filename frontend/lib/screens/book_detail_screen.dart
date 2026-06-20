@@ -177,7 +177,38 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     final book = _book!;
 
     return Scaffold(
-      appBar: AppBar(title: Text(book.title)),
+      appBar: AppBar(
+        title: Text(book.title),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'edit') {
+                _showEditDialog();
+              } else if (value == 'delete') {
+                _showDeleteConfirmation();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: ListTile(
+                  leading: Icon(Icons.edit_outlined),
+                  title: Text('Редактировать'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  leading: Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text('Удалить книгу', style: TextStyle(color: Colors.red)),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: _addNoteDialog,
         icon: const Icon(Icons.note_add_outlined),
@@ -280,6 +311,112 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         ],
       ),
     );
+  }
+
+  // Диалог редактирования названия, автора и жанра книги
+  Future<void> _showEditDialog() async {
+    final titleController = TextEditingController(text: _book!.title);
+    final authorController = TextEditingController(text: _book!.author ?? '');
+    final genreController = TextEditingController(text: _book!.genre ?? '');
+    final formKey = GlobalKey<FormState>();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Редактировать книгу'),
+        content: Form(
+          key: formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: titleController,
+                decoration: const InputDecoration(labelText: 'Название *'),
+                validator: (value) =>
+                    (value == null || value.trim().isEmpty) ? 'Введите название' : null,
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: authorController,
+                decoration: const InputDecoration(labelText: 'Автор'),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: genreController,
+                decoration: const InputDecoration(labelText: 'Жанр'),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            onPressed: () async {
+              if (!formKey.currentState!.validate()) return;
+
+              try {
+                await _bookService.updateMetadata(
+                  bookId: widget.bookId,
+                  title: titleController.text.trim(),
+                  author: authorController.text.trim(),
+                  genre: genreController.text.trim(),
+                );
+                if (context.mounted) Navigator.of(context).pop();
+                _loadData();
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Не удалось сохранить изменения: $e')),
+                  );
+                }
+              }
+            },
+            child: const Text('Сохранить'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Диалог подтверждения удаления книги. После удаления возвращаемся
+  // на экран библиотеки, передавая true, чтобы список обновился.
+  Future<void> _showDeleteConfirmation() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить книгу?'),
+        content: Text(
+          'Книга «${_book!.title}» будет удалена вместе с файлом, заметками и историей чтения. Это действие нельзя отменить.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Отмена'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Удалить'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      await _bookService.deleteBook(widget.bookId);
+      if (mounted) Navigator.of(context).pop(true); // возвращаемся в библиотеку
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось удалить книгу: $e')),
+        );
+      }
+    }
   }
 
   Future<void> _changeCover() async {
