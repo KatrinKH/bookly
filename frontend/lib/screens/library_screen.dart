@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/book.dart';
 import '../services/book_service.dart';
 import '../utils/app_theme.dart';
 import '../widgets/book_card.dart';
+import '../widgets/book_grid_card.dart';
 import 'book_detail_screen.dart';
 import 'upload_book_screen.dart';
 import 'stats_screen.dart';
@@ -69,11 +71,27 @@ class _LibraryTabState extends State<_LibraryTab> {
   List<Book> _books = [];
   bool _isLoading = true;
   String? _statusFilter;
+  bool _isGridView = false; // false = список, true = сетка 2 в ряд
+
+  static const _viewModeKey = 'library_view_mode';
 
   @override
   void initState() {
     super.initState();
+    _loadViewMode();
     _loadBooks();
+  }
+
+  Future<void> _loadViewMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    final isGrid = prefs.getBool(_viewModeKey) ?? false;
+    if (mounted) setState(() => _isGridView = isGrid);
+  }
+
+  Future<void> _toggleViewMode() async {
+    setState(() => _isGridView = !_isGridView);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_viewModeKey, _isGridView);
   }
 
   Future<void> _loadBooks() async {
@@ -110,6 +128,13 @@ class _LibraryTabState extends State<_LibraryTab> {
               centerTitle: true,
               floating: true,
               automaticallyImplyLeading: false,
+              actions: [
+                IconButton(
+                  icon: Icon(_isGridView ? Icons.view_list_outlined : Icons.grid_view_outlined),
+                  tooltip: _isGridView ? 'Список' : 'Сетка',
+                  onPressed: _toggleViewMode,
+                ),
+              ],
             ),
             SliverToBoxAdapter(
               child: SizedBox(
@@ -155,6 +180,46 @@ class _LibraryTabState extends State<_LibraryTab> {
                           style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
                     ],
                   ),
+                ),
+              )
+            else if (_isGridView)
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                sliver: SliverLayoutBuilder(
+                  builder: (context, constraints) {
+                    // Ширина одной колонки = (доступная ширина - отступ между колонками) / 2
+                    final columnWidth = (constraints.crossAxisExtent - 12) / 2;
+                    // Высота обложки определяется аспектом 3:4 от ширины колонки
+                    final coverHeight = columnWidth * 4 / 3;
+                    // Текстовый блок имеет фиксированную высоту 92 (см. book_grid_card.dart)
+                    const textBlockHeight = 98.0;
+                    final cardHeight = coverHeight + textBlockHeight;
+                    final aspectRatio = columnWidth / cardHeight;
+
+                    return SliverGrid(
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        crossAxisSpacing: 12,
+                        mainAxisSpacing: 12,
+                        childAspectRatio: aspectRatio,
+                      ),
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final book = _books[index];
+                          return BookGridCard(
+                            book: book,
+                            onTap: () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(builder: (_) => BookDetailScreen(bookId: book.id)),
+                              );
+                              _loadBooks();
+                            },
+                          );
+                        },
+                        childCount: _books.length,
+                      ),
+                    );
+                  },
                 ),
               )
             else
