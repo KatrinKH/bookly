@@ -161,6 +161,59 @@ async function getBookById(req, res) {
   }
 }
 
+// Изменение метаданных книги — название, автор, жанр.
+// Поле не передано вовсе -> остаётся как было.
+// Поле передано пустой строкой -> очищается (только для author/genre; title обязателен).
+// Поле передано с текстом -> обновляется.
+async function updateMetadata(req, res) {
+  const { title, author, genre } = req.body;
+
+  if (title !== undefined && title.trim() === '') {
+    return res.status(400).json({ error: 'Название книги не может быть пустым' });
+  }
+
+  try {
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (title !== undefined) {
+      fields.push(`title = $${paramIndex++}`);
+      values.push(title.trim());
+    }
+    if (author !== undefined) {
+      fields.push(`author = $${paramIndex++}`);
+      values.push(author.trim() === '' ? null : author.trim());
+    }
+    if (genre !== undefined) {
+      fields.push(`genre = $${paramIndex++}`);
+      values.push(genre.trim() === '' ? null : genre.trim());
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Нет данных для обновления' });
+    }
+
+    values.push(req.params.id, req.userId);
+
+    const result = await pool.query(
+      `UPDATE books SET ${fields.join(', ')}
+       WHERE id = $${paramIndex++} AND user_id = $${paramIndex}
+       RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Книга не найдена' });
+    }
+
+    res.json(formatBook(result.rows[0]));
+  } catch (err) {
+    console.error('Ошибка изменения метаданных книги:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
 // Скачивание/потоковая отдача файла книги (для открытия в читалке)
 async function downloadBookFile(req, res) {
   try {
@@ -338,6 +391,7 @@ module.exports = {
   uploadBook,
   updateCover,
   downloadCover,
+  updateMetadata,
   getBooks,
   getBookById,
   downloadBookFile,

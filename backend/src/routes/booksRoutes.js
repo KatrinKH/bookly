@@ -13,6 +13,7 @@ router.post(
 );
 router.get('/', booksController.getBooks);
 router.get('/:id', booksController.getBookById);
+router.patch('/:id', booksController.updateMetadata);
 router.get('/:id/file', booksController.downloadBookFile);
 router.get('/:id/cover', booksController.downloadCover);
 router.patch(
