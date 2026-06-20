@@ -87,12 +87,45 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                       );
                     }),
                   ),
+                  const SizedBox(height: 12),
+                  const Text('Понравилась книга?'),
                   const SizedBox(height: 8),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Понравилась книга'),
-                    value: liked,
-                    onChanged: (value) => setDialogState(() => liked = value),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: liked ? Colors.green.withOpacity(0.15) : null,
+                            side: BorderSide(color: liked ? Colors.green : Colors.grey.shade400),
+                          ),
+                          onPressed: () => setDialogState(() => liked = true),
+                          child: Text(
+                            'Да',
+                            style: TextStyle(
+                              color: liked ? Colors.green.shade700 : null,
+                              fontWeight: liked ? FontWeight.bold : null,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            backgroundColor: !liked ? Colors.red.withOpacity(0.15) : null,
+                            side: BorderSide(color: !liked ? Colors.red : Colors.grey.shade400),
+                          ),
+                          onPressed: () => setDialogState(() => liked = false),
+                          child: Text(
+                            'Нет',
+                            style: TextStyle(
+                              color: !liked ? Colors.red.shade700 : null,
+                              fontWeight: !liked ? FontWeight.bold : null,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
