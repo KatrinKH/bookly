@@ -191,11 +191,12 @@ class BookService {
     return Book.fromJson(data);
   }
 
-  // Отметить книгу прочитанной, поставить оценку и лайк
+  // Отметить книгу прочитанной, поставить оценку, лайк и написать отзыв
   Future<Book> finishBook({
     required int bookId,
     int? rating,
     bool? liked,
+    String? review,
   }) async {
     final headers = await _authHeaders();
     headers['Content-Type'] = 'application/json';
@@ -206,6 +207,7 @@ class BookService {
       body: jsonEncode({
         if (rating != null) 'rating': rating,
         if (liked != null) 'liked': liked,
+        if (review != null) 'review': review,
       }),
     );
 
@@ -213,6 +215,36 @@ class BookService {
 
     if (response.statusCode != 200) {
       throw Exception(data['error'] ?? 'Не удалось завершить книгу (код ${response.statusCode})');
+    }
+
+    return Book.fromJson(data);
+  }
+
+  // Изменение оценки/лайка/отзыва уже прочитанной книги.
+  // В отличие от finishBook не трогает finished_at — для редактирования отзыва после прочтения.
+  Future<Book> updateReview({
+    required int bookId,
+    int? rating,
+    bool? liked,
+    String? review,
+  }) async {
+    final headers = await _authHeaders();
+    headers['Content-Type'] = 'application/json';
+
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/books/$bookId/review'),
+      headers: headers,
+      body: jsonEncode({
+        if (rating != null) 'rating': rating,
+        if (liked != null) 'liked': liked,
+        if (review != null) 'review': review,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось обновить отзыв (код ${response.statusCode})');
     }
 
     return Book.fromJson(data);

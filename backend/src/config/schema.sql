@@ -27,8 +27,12 @@ CREATE TABLE IF NOT EXISTS books (
     finished_at TIMESTAMP,
     rating SMALLINT CHECK (rating BETWEEN 1 AND 5),
     liked BOOLEAN,
+    review TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Безопасное добавление поля review для баз, созданных до появления этой колонки
+ALTER TABLE books ADD COLUMN IF NOT EXISTS review TEXT;
 
 -- Заметки, привязанные к конкретной книге и месту в ней
 CREATE TABLE IF NOT EXISTS notes (

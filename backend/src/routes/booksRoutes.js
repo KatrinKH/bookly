@@ -25,6 +25,7 @@ router.patch('/:id/progress', booksController.updateProgress);
 router.post('/:id/session/start', booksController.startReadingSession);
 router.patch('/:id/session/end', booksController.endReadingSession);
 router.patch('/:id/finish', booksController.finishBook);
+router.patch('/:id/review', booksController.updateReview);
 router.delete('/:id', booksController.deleteBook);
 
 module.exports = router;

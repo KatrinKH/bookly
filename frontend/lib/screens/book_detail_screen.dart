@@ -59,9 +59,15 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     _loadData(); // Обновляем прогресс после возврата из читалки
   }
 
-  Future<void> _showFinishDialog() async {
+  // Диалог оценки книги: звёзды, лайк/дизлайк и текстовый отзыв.
+  // Если книга ещё не была завершена — вызывается finishBook (фиксирует дату завершения).
+  // Если книга уже прочитана (редактирование отзыва) — вызывается updateReview,
+  // которая не трогает дату завершения.
+  Future<void> _showReviewDialog() async {
     int rating = _book!.rating ?? 3;
     bool liked = _book!.liked ?? true;
+    final reviewController = TextEditingController(text: _book!.review ?? '');
+    final isFirstTime = !_book!.isFinished;
 
     await showDialog(
       context: context,
@@ -69,65 +75,78 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Завершить книгу'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Оценка:'),
-                  Row(
-                    children: List.generate(5, (i) {
-                      final starIndex = i + 1;
-                      return IconButton(
-                        icon: Icon(
-                          starIndex <= rating ? Icons.star : Icons.star_border,
-                          color: Colors.amber,
-                        ),
-                        onPressed: () => setDialogState(() => rating = starIndex),
-                      );
-                    }),
-                  ),
-                  const SizedBox(height: 12),
-                  const Text('Понравилась книга?'),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: liked ? Colors.green.withOpacity(0.15) : null,
-                            side: BorderSide(color: liked ? Colors.green : Colors.grey.shade400),
+              title: Text(isFirstTime ? 'Завершить книгу' : 'Редактировать отзыв'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Оценка:'),
+                    Row(
+                      children: List.generate(5, (i) {
+                        final starIndex = i + 1;
+                        return IconButton(
+                          icon: Icon(
+                            starIndex <= rating ? Icons.star : Icons.star_border,
+                            color: Colors.amber,
                           ),
-                          onPressed: () => setDialogState(() => liked = true),
-                          child: Text(
-                            'Да',
-                            style: TextStyle(
-                              color: liked ? Colors.green.shade700 : null,
-                              fontWeight: liked ? FontWeight.bold : null,
+                          onPressed: () => setDialogState(() => rating = starIndex),
+                        );
+                      }),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text('Понравилась книга?'),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: liked ? Colors.green.withOpacity(0.15) : null,
+                              side: BorderSide(color: liked ? Colors.green : Colors.grey.shade400),
+                            ),
+                            onPressed: () => setDialogState(() => liked = true),
+                            child: Text(
+                              'Да',
+                              style: TextStyle(
+                                color: liked ? Colors.green.shade700 : null,
+                                fontWeight: liked ? FontWeight.bold : null,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            backgroundColor: !liked ? Colors.red.withOpacity(0.15) : null,
-                            side: BorderSide(color: !liked ? Colors.red : Colors.grey.shade400),
-                          ),
-                          onPressed: () => setDialogState(() => liked = false),
-                          child: Text(
-                            'Нет',
-                            style: TextStyle(
-                              color: !liked ? Colors.red.shade700 : null,
-                              fontWeight: !liked ? FontWeight.bold : null,
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              backgroundColor: !liked ? Colors.red.withOpacity(0.15) : null,
+                              side: BorderSide(color: !liked ? Colors.red : Colors.grey.shade400),
+                            ),
+                            onPressed: () => setDialogState(() => liked = false),
+                            child: Text(
+                              'Нет',
+                              style: TextStyle(
+                                color: !liked ? Colors.red.shade700 : null,
+                                fontWeight: !liked ? FontWeight.bold : null,
+                              ),
                             ),
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    const Text('Ваше мнение о книге:'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: reviewController,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        hintText: 'Что понравилось, что не понравилось, кому бы вы посоветовали...',
+                        border: OutlineInputBorder(),
                       ),
-                    ],
-                  ),
-                ],
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -136,11 +155,21 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 ),
                 FilledButton(
                   onPressed: () async {
-                    await _bookService.finishBook(
-                      bookId: widget.bookId,
-                      rating: rating,
-                      liked: liked,
-                    );
+                    if (isFirstTime) {
+                      await _bookService.finishBook(
+                        bookId: widget.bookId,
+                        rating: rating,
+                        liked: liked,
+                        review: reviewController.text.trim(),
+                      );
+                    } else {
+                      await _bookService.updateReview(
+                        bookId: widget.bookId,
+                        rating: rating,
+                        liked: liked,
+                        review: reviewController.text.trim(),
+                      );
+                    }
                     if (context.mounted) Navigator.of(context).pop();
                     _loadData();
                   },
@@ -309,12 +338,13 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
               if (!book.isFinished) ...[
                 const SizedBox(width: 8),
                 OutlinedButton(
-                  onPressed: _showFinishDialog,
+                  onPressed: _showReviewDialog,
                   child: const Text('Завершить'),
                 ),
               ],
             ],
           ),
+          if (book.isFinished) _buildReviewSection(book),
           const SizedBox(height: 24),
           Text('Заметки (${_notes.length})',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -473,6 +503,66 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         );
       }
     }
+  }
+
+  // Блок с сохранённым отзывом: оценка, лайк/дизлайк, текст отзыва и кнопка редактирования.
+  // Показывается только для уже прочитанных книг.
+  Widget _buildReviewSection(Book book) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 16),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Мой отзыв', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (book.rating != null)
+                    Row(
+                      children: List.generate(5, (i) {
+                        return Icon(
+                          i < book.rating! ? Icons.star : Icons.star_border,
+                          color: Colors.amber,
+                          size: 20,
+                        );
+                      }),
+                    ),
+                  if (book.liked != null) ...[
+                    const SizedBox(width: 12),
+                    Icon(
+                      book.liked! ? Icons.thumb_up : Icons.thumb_down,
+                      color: book.liked! ? Colors.green : Colors.red,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      book.liked! ? 'Понравилась' : 'Не понравилась',
+                      style: TextStyle(
+                        color: book.liked! ? Colors.green.shade700 : Colors.red.shade700,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (book.review != null && book.review!.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Text(book.review!, style: const TextStyle(fontSize: 14)),
+              ],
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _showReviewDialog,
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: const Text('Редактировать отзыв'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   String _formatDate(DateTime date) {

@@ -380,20 +380,29 @@ async function endReadingSession(req, res) {
   }
 }
 
-// Отметка книги прочитанной + оценка + лайк
+// Отметка книги прочитанной + оценка + лайк + отзыв.
+// finished_at проставляется только при первом переводе в статус 'finished' —
+// повторный вызов (редактирование отзыва) не должен сдвигать дату завершения.
 async function finishBook(req, res) {
-  const { rating, liked } = req.body;
+  const { rating, liked, review } = req.body;
 
   try {
     const result = await pool.query(
       `UPDATE books
        SET status = 'finished',
-           finished_at = NOW(),
+           finished_at = COALESCE(finished_at, NOW()),
            rating = $1,
-           liked = $2
-       WHERE id = $3 AND user_id = $4
+           liked = $2,
+           review = $3
+       WHERE id = $4 AND user_id = $5
        RETURNING *`,
-      [rating || null, liked !== undefined ? liked : null, req.params.id, req.userId]
+      [
+        rating || null,
+        liked !== undefined ? liked : null,
+        review !== undefined ? (review.trim() === '' ? null : review.trim()) : null,
+        req.params.id,
+        req.userId,
+      ]
     );
 
     if (result.rows.length === 0) {
@@ -403,6 +412,53 @@ async function finishBook(req, res) {
     res.json(formatBook(result.rows[0]));
   } catch (err) {
     console.error('Ошибка завершения книги:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
+// Обновление оценки/лайка/отзыва уже прочитанной книги без изменения её статуса.
+// Используется когда пользователь редактирует свой отзыв после прочтения.
+async function updateReview(req, res) {
+  const { rating, liked, review } = req.body;
+
+  try {
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (rating !== undefined) {
+      fields.push(`rating = $${paramIndex++}`);
+      values.push(rating);
+    }
+    if (liked !== undefined) {
+      fields.push(`liked = $${paramIndex++}`);
+      values.push(liked);
+    }
+    if (review !== undefined) {
+      fields.push(`review = $${paramIndex++}`);
+      values.push(review.trim() === '' ? null : review.trim());
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Нет данных для обновления' });
+    }
+
+    values.push(req.params.id, req.userId);
+
+    const result = await pool.query(
+      `UPDATE books SET ${fields.join(', ')}
+       WHERE id = $${paramIndex++} AND user_id = $${paramIndex} AND status = 'finished'
+       RETURNING *`,
+      values
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Книга не найдена или ещё не прочитана' });
+    }
+
+    res.json(formatBook(result.rows[0]));
+  } catch (err) {
+    console.error('Ошибка обновления отзыва:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
@@ -448,6 +504,7 @@ function formatBook(row) {
     finishedAt: row.finished_at,
     rating: row.rating,
     liked: row.liked,
+    review: row.review,
     hasCover: !!row.cover_path,
     createdAt: row.created_at,
   };
@@ -465,5 +522,6 @@ module.exports = {
   startReadingSession,
   endReadingSession,
   finishBook,
+  updateReview,
   deleteBook,
 };
