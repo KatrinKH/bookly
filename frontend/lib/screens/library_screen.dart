@@ -73,6 +73,12 @@ class _LibraryTabState extends State<_LibraryTab> {
   String? _statusFilter;
   bool _isGridView = false; // false = список, true = сетка 2 в ряд
 
+  // Поиск по названию — фильтрует уже загруженный список локально,
+  // без дополнительных запросов к серверу.
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+  String _searchQuery = '';
+
   static const _viewModeKey = 'library_view_mode';
 
   @override
@@ -92,6 +98,25 @@ class _LibraryTabState extends State<_LibraryTab> {
     setState(() => _isGridView = !_isGridView);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_viewModeKey, _isGridView);
+  }
+
+  void _openSearch() {
+    setState(() => _isSearching = true);
+  }
+
+  void _closeSearch() {
+    setState(() {
+      _isSearching = false;
+      _searchQuery = '';
+      _searchController.clear();
+    });
+  }
+
+  // Список книг с учётом поискового запроса по названию (без учёта регистра)
+  List<Book> get _filteredBooks {
+    if (_searchQuery.isEmpty) return _books;
+    final query = _searchQuery.toLowerCase();
+    return _books.where((book) => book.title.toLowerCase().contains(query)).toList();
   }
 
   Future<void> _loadBooks() async {
@@ -118,22 +143,46 @@ class _LibraryTabState extends State<_LibraryTab> {
         child: CustomScrollView(
           slivers: [
             SliverAppBar(
-              title: Text(
-                'Моя библиотека',
-                style: AppTheme.brandFont(
-                  fontSize: 24,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
-              ),
-              centerTitle: true,
+              leading: _isSearching
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.search),
+                      tooltip: 'Поиск по названию',
+                      onPressed: _openSearch,
+                    ),
+              title: _isSearching
+                  ? TextField(
+                      controller: _searchController,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Поиск по названию...',
+                        border: InputBorder.none,
+                      ),
+                      onChanged: (value) => setState(() => _searchQuery = value),
+                    )
+                  : Text(
+                      'Моя библиотека',
+                      style: AppTheme.brandFont(
+                        fontSize: 24,
+                        color: Theme.of(context).colorScheme.primary,
+                      ),
+                    ),
+              centerTitle: !_isSearching,
               floating: true,
               automaticallyImplyLeading: false,
               actions: [
-                IconButton(
-                  icon: Icon(_isGridView ? Icons.view_list_outlined : Icons.grid_view_outlined),
-                  tooltip: _isGridView ? 'Список' : 'Сетка',
-                  onPressed: _toggleViewMode,
-                ),
+                if (_isSearching)
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    tooltip: 'Закрыть поиск',
+                    onPressed: _closeSearch,
+                  )
+                else
+                  IconButton(
+                    icon: Icon(_isGridView ? Icons.view_list_outlined : Icons.grid_view_outlined),
+                    tooltip: _isGridView ? 'Список' : 'Сетка',
+                    onPressed: _toggleViewMode,
+                  ),
               ],
             ),
             SliverToBoxAdapter(
@@ -166,18 +215,29 @@ class _LibraryTabState extends State<_LibraryTab> {
             const SliverToBoxAdapter(child: SizedBox(height: 8)),
             if (_isLoading)
               const SliverFillRemaining(child: Center(child: CircularProgressIndicator()))
-            else if (_books.isEmpty)
+            else if (_filteredBooks.isEmpty)
               SliverFillRemaining(
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.menu_book_outlined, size: 64, color: Colors.grey.shade400),
+                      Icon(
+                        _searchQuery.isNotEmpty ? Icons.search_off : Icons.menu_book_outlined,
+                        size: 64,
+                        color: Colors.grey.shade400,
+                      ),
                       const SizedBox(height: 12),
-                      Text('Пока нет книг', style: TextStyle(color: Colors.grey.shade600)),
+                      Text(
+                        _searchQuery.isNotEmpty ? 'Ничего не найдено' : 'Пока нет книг',
+                        style: TextStyle(color: Colors.grey.shade600),
+                      ),
                       const SizedBox(height: 4),
-                      Text('Нажмите +, чтобы добавить первую книгу',
-                          style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+                      Text(
+                        _searchQuery.isNotEmpty
+                            ? 'Попробуйте изменить запрос'
+                            : 'Нажмите +, чтобы добавить первую книгу',
+                        style: TextStyle(color: Colors.grey.shade500, fontSize: 13),
+                      ),
                     ],
                   ),
                 ),
@@ -205,7 +265,7 @@ class _LibraryTabState extends State<_LibraryTab> {
                       ),
                       delegate: SliverChildBuilderDelegate(
                         (context, index) {
-                          final book = _books[index];
+                          final book = _filteredBooks[index];
                           return BookGridCard(
                             book: book,
                             onTap: () async {
@@ -216,7 +276,7 @@ class _LibraryTabState extends State<_LibraryTab> {
                             },
                           );
                         },
-                        childCount: _books.length,
+                        childCount: _filteredBooks.length,
                       ),
                     );
                   },
@@ -226,7 +286,7 @@ class _LibraryTabState extends State<_LibraryTab> {
               SliverList(
                 delegate: SliverChildBuilderDelegate(
                   (context, index) {
-                    final book = _books[index];
+                    final book = _filteredBooks[index];
                     return BookCard(
                       book: book,
                       onTap: () async {
@@ -237,7 +297,7 @@ class _LibraryTabState extends State<_LibraryTab> {
                       },
                     );
                   },
-                  childCount: _books.length,
+                  childCount: _filteredBooks.length,
                 ),
               ),
             const SliverToBoxAdapter(child: SizedBox(height: 80)),
@@ -245,6 +305,12 @@ class _LibraryTabState extends State<_LibraryTab> {
         ),
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 }
 
