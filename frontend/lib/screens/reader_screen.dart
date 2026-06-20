@@ -30,7 +30,7 @@ class _ReaderScreenState extends State<ReaderScreen> {
   bool _isDownloading = false;
   int? _sessionId;
 
-  String get _progressKey => 'epub_progress_${widget.book.id}';
+  String get _cfiKey => 'epub_cfi_${widget.book.id}';
 
   @override
   void initState() {
@@ -86,29 +86,41 @@ class _ReaderScreenState extends State<ReaderScreen> {
         _isLoading = false;
       });
     }
+
+    // Сообщаем backend, что книга открыта — переводит статус not_started -> reading
+    // и фиксирует started_at. Для EPUB страниц как таковых нет, поэтому передаём
+    // условный прогресс 1, чтобы статус сменился даже если пользователь не скроллил.
+    _markEpubAsStarted();
   }
 
-  // Восстанавливаем позицию через toProgressPercentage
+  Future<void> _markEpubAsStarted() async {
+    try {
+      await _bookService.updateProgress(
+        bookId: widget.book.id,
+        currentPage: widget.book.currentPage > 0 ? widget.book.currentPage : 1,
+      );
+    } catch (_) {}
+  }
+
   Future<void> _restorePosition() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      final savedProgress = prefs.getDouble(_progressKey);
-      if (savedProgress != null && savedProgress > 0) {
-        await Future.delayed(const Duration(milliseconds: 500));
-        _epubController.toProgressPercentage(savedProgress);
+      final savedCfi = prefs.getString(_cfiKey);
+      if (savedCfi != null && savedCfi.isNotEmpty) {
+        // Увеличенная задержка — scrolled-режим требует больше времени на инициализацию
+        await Future.delayed(const Duration(milliseconds: 1500));
+        _epubController.display(cfi: savedCfi);
       }
     } catch (_) {}
   }
 
-  // Сохраняем прогресс при каждом перемещении.
-  // Это единственный надёжный способ — dispose() нельзя использовать
-  // потому что WebView уже уничтожен к тому моменту.
   void _savePosition(EpubLocation location) {
-    try {
+    final cfi = location.startCfi;
+    if (cfi.isNotEmpty) {
       SharedPreferences.getInstance().then((prefs) {
-        prefs.setDouble(_progressKey, location.progress);
+        prefs.setString(_cfiKey, cfi);
       });
-    } catch (_) {}
+    }
   }
 
   Future<void> _savePdfProgress(int currentPage, {int? totalPages}) async {
@@ -186,8 +198,6 @@ class _ReaderScreenState extends State<ReaderScreen> {
 
   @override
   void dispose() {
-    // НЕ вызываем getCurrentLocation() здесь — WebView уже уничтожен.
-    // Позиция сохраняется через onRelocated при каждом движении.
     if (_sessionId != null) {
       _bookService.endReadingSession(widget.book.id, _sessionId!).catchError((_) {});
     }
