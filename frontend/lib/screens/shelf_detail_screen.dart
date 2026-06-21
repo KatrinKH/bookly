@@ -24,12 +24,46 @@ class _ShelfDetailScreenState extends State<ShelfDetailScreen> {
   late String _shelfName;
   List<Book> _books = [];
   bool _isLoading = true;
+  String _sort = 'date_added'; // date_added | title
 
   @override
   void initState() {
     super.initState();
     _shelfName = widget.shelf.name;
     _loadBooks();
+  }
+
+  // Список книг с учётом выбранной сортировки.
+  // 'date_added' — порядок, в котором их вернул backend (по дате добавления на полку, новые сверху).
+  // 'title' — по алфавиту названия книги (без учёта регистра).
+  List<Book> get _sortedBooks {
+    if (_sort == 'title') {
+      final sorted = [..._books];
+      sorted.sort((a, b) {
+        final titleA = _normalizeForSort(a.title);
+        final titleB = _normalizeForSort(b.title);
+        return titleA.compareTo(titleB);
+      });
+      return sorted;
+    }
+    return _books;
+  }
+
+  // Некоторые названия книг содержат "й"/"ё" в разложенной Unicode-форме
+  // (например, "и" + U+0306 combining breve вместо единого символа "й").
+  // Это приводит к неправильному алфавитному сравнению, так как "и"
+  // оказывается "меньше" любой другой буквы, идущей после полного "й".
+  // Приводим такие сочетания к стандартной составной форме перед сравнением.
+  String _normalizeForSort(String text) {
+    return text
+        .trim()
+        .toLowerCase()
+        .replaceAll('и\u0306', 'й') // и + combining breve -> й
+        .replaceAll('е\u0308', 'ё'); // е + combining diaeresis -> ё (на всякий случай)
+  }
+
+  void _onSortChanged(String sort) {
+    setState(() => _sort = sort);
   }
 
   Future<void> _loadBooks() async {
@@ -232,6 +266,23 @@ class _ShelfDetailScreenState extends State<ShelfDetailScreen> {
         title: Text(_shelfName),
         actions: [
           PopupMenuButton<String>(
+            icon: const Icon(Icons.sort),
+            tooltip: 'Сортировка',
+            onSelected: _onSortChanged,
+            itemBuilder: (context) => [
+              CheckedPopupMenuItem(
+                value: 'date_added',
+                checked: _sort == 'date_added',
+                child: const Text('По дате добавления'),
+              ),
+              CheckedPopupMenuItem(
+                value: 'title',
+                checked: _sort == 'title',
+                child: const Text('По названию'),
+              ),
+            ],
+          ),
+          PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'add_books') {
                 _showAddBooksDialog();
@@ -279,9 +330,9 @@ class _ShelfDetailScreenState extends State<ShelfDetailScreen> {
                   ? _buildEmptyState()
                   : ListView.builder(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      itemCount: _books.length,
+                      itemCount: _sortedBooks.length,
                       itemBuilder: (context, index) {
-                        final book = _books[index];
+                        final book = _sortedBooks[index];
                         return Dismissible(
                           key: ValueKey(book.id),
                           direction: DismissDirection.endToStart,
