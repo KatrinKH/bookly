@@ -6,6 +6,7 @@ const authRoutes = require('./routes/authRoutes');
 const booksRoutes = require('./routes/booksRoutes');
 const notesRoutes = require('./routes/notesRoutes');
 const statsRoutes = require('./routes/statsRoutes');
+const shelvesRoutes = require('./routes/shelvesRoutes');
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/books', booksRoutes);
 app.use('/api/notes', notesRoutes);
 app.use('/api/stats', statsRoutes);
+app.use('/api/shelves', shelvesRoutes);
 
 // Обработчик ошибок Multer и прочих ошибок загрузки файлов
 app.use((err, req, res, next) => {

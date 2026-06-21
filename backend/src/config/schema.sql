@@ -58,8 +58,27 @@ CREATE TABLE IF NOT EXISTS reading_sessions (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+-- Полки — пользовательские коллекции книг (например "Хочу прочитать", "Любимое")
+CREATE TABLE IF NOT EXISTS shelves (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(200) NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- Связь "многие-ко-многим": одна книга может быть на нескольких полках одновременно
+CREATE TABLE IF NOT EXISTS book_shelves (
+    book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE,
+    shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+    added_at TIMESTAMP DEFAULT NOW(),
+    PRIMARY KEY (book_id, shelf_id)
+);
+
 -- Индексы для ускорения частых запросов
 CREATE INDEX IF NOT EXISTS idx_books_user_id ON books(user_id);
 CREATE INDEX IF NOT EXISTS idx_notes_book_id ON notes(book_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON reading_sessions(user_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_started_at ON reading_sessions(started_at);
+CREATE INDEX IF NOT EXISTS idx_shelves_user_id ON shelves(user_id);
+CREATE INDEX IF NOT EXISTS idx_book_shelves_shelf_id ON book_shelves(shelf_id);
+CREATE INDEX IF NOT EXISTS idx_book_shelves_book_id ON book_shelves(book_id);
