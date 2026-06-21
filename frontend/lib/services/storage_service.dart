@@ -38,6 +38,14 @@ class StorageService {
     };
   }
 
+  // Обновляет локально сохранённые email/имя без изменения токена —
+  // используется после редактирования профиля в настройках.
+  Future<void> updateUserData({String? email, String? displayName}) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (email != null) await prefs.setString(_userEmailKey, email);
+    if (displayName != null) await prefs.setString(_userNameKey, displayName);
+  }
+
   Future<void> clearSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();

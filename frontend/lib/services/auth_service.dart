@@ -67,6 +67,37 @@ class AuthService {
     return token != null;
   }
 
+  // Изменение имени и/или email пользователя. Передавай только то, что нужно изменить.
+  // После успешного ответа обновляет локально сохранённые данные (без изменения токена).
+  Future<AppUser> updateProfile({String? displayName, String? email}) async {
+    final token = await _storage.getToken();
+
+    final response = await http.patch(
+      Uri.parse('${ApiConfig.baseUrl}/auth/profile'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode({
+        if (displayName != null) 'displayName': displayName,
+        if (email != null) 'email': email,
+      }),
+    );
+
+    final data = jsonDecode(response.body);
+
+    if (response.statusCode != 200) {
+      throw Exception(data['error'] ?? 'Не удалось обновить профиль');
+    }
+
+    await _storage.updateUserData(
+      email: data['email'],
+      displayName: data['displayName'],
+    );
+
+    return AppUser.fromJson(data);
+  }
+
   Future<AppUser?> getStoredUser() async {
     final userData = await _storage.getUserData();
     if (userData == null || userData['id'] == null) return null;
