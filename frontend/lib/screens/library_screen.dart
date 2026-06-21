@@ -8,6 +8,7 @@ import '../widgets/book_grid_card.dart';
 import 'book_detail_screen.dart';
 import 'upload_book_screen.dart';
 import 'stats_screen.dart';
+import 'shelves_screen.dart';
 import 'profile_screen.dart';
 
 // Главный экран приложения: список книг библиотеки пользователя
@@ -27,6 +28,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final tabs = [
       const _LibraryTab(),
       const StatsScreen(),
+      const ShelvesScreen(),
       const ProfileScreen(),
     ];
 
@@ -51,6 +53,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
         destinations: const [
           NavigationDestination(icon: Icon(Icons.menu_book_outlined), label: 'Библиотека'),
           NavigationDestination(icon: Icon(Icons.bar_chart_outlined), label: 'Статистика'),
+          NavigationDestination(icon: Icon(Icons.collections_bookmark_outlined), label: 'Полки'),
           NavigationDestination(icon: Icon(Icons.person_outline), label: 'Профиль'),
         ],
       ),

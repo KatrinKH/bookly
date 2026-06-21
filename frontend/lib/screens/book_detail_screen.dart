@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import '../models/book.dart';
 import '../models/note.dart';
+import '../models/shelf.dart';
 import '../services/book_service.dart';
 import '../services/note_service.dart';
+import '../services/shelf_service.dart';
 import '../widgets/book_cover_image.dart';
 import 'reader_screen.dart';
 
@@ -21,6 +23,7 @@ class BookDetailScreen extends StatefulWidget {
 class _BookDetailScreenState extends State<BookDetailScreen> {
   final BookService _bookService = BookService();
   final NoteService _noteService = NoteService();
+  final ShelfService _shelfService = ShelfService();
 
   Book? _book;
   List<Note> _notes = [];
@@ -248,9 +251,19 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                 _showEditDialog();
               } else if (value == 'delete') {
                 _showDeleteConfirmation();
+              } else if (value == 'shelves') {
+                _showAddToShelfDialog();
               }
             },
             itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'shelves',
+                child: ListTile(
+                  leading: Icon(Icons.bookmark_add_outlined),
+                  title: Text('Добавить на полку'),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
               const PopupMenuItem(
                 value: 'edit',
                 child: ListTile(
@@ -499,6 +512,101 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
         );
       }
     }
+  }
+
+  // Диалог выбора полок: показывает чекбоксы всех полок пользователя,
+  // отмечая те, на которых книга уже находится. Изменения применяются
+  // сразу при переключении (добавление/удаление с полки).
+  Future<void> _showAddToShelfDialog() async {
+    List<Shelf> shelves;
+    try {
+      shelves = await _shelfService.getShelves();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось загрузить полки: $e')),
+        );
+      }
+      return;
+    }
+
+    if (shelves.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('У вас пока нет полок. Создайте полку на вкладке «Полки».')),
+        );
+      }
+      return;
+    }
+
+    // Узнаём, на каких полках уже есть эта книга — проверяем книги каждой полки.
+    // Для простоты делаем это последовательно (полок обычно немного).
+    final selectedShelfIds = <int>{};
+    for (final shelf in shelves) {
+      try {
+        final books = await _shelfService.getShelfBooks(shelf.id);
+        if (books.any((b) => b.id == widget.bookId)) {
+          selectedShelfIds.add(shelf.id);
+        }
+      } catch (_) {}
+    }
+
+    if (!mounted) return;
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Text('Добавить на полку'),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: ListView(
+                  shrinkWrap: true,
+                  children: shelves.map((shelf) {
+                    final isSelected = selectedShelfIds.contains(shelf.id);
+                    return CheckboxListTile(
+                      title: Text(shelf.name),
+                      value: isSelected,
+                      onChanged: (checked) async {
+                        try {
+                          if (checked == true) {
+                            await _shelfService.addBookToShelf(
+                              shelfId: shelf.id,
+                              bookId: widget.bookId,
+                            );
+                            setDialogState(() => selectedShelfIds.add(shelf.id));
+                          } else {
+                            await _shelfService.removeBookFromShelf(
+                              shelfId: shelf.id,
+                              bookId: widget.bookId,
+                            );
+                            setDialogState(() => selectedShelfIds.remove(shelf.id));
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(content: Text(e.toString().replaceFirst('Exception: ', ''))),
+                            );
+                          }
+                        }
+                      },
+                    );
+                  }).toList(),
+                ),
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Готово'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<void> _changeCover() async {
