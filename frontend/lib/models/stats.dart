@@ -30,6 +30,21 @@ class PeriodStat {
   }
 }
 
+// Краткая информация о прочитанной книге для списка в статистике
+class FinishedBookSummary {
+  final String title;
+  final String? author;
+
+  FinishedBookSummary({required this.title, this.author});
+
+  factory FinishedBookSummary.fromJson(Map<String, dynamic> json) {
+    return FinishedBookSummary(
+      title: json['title'] ?? '',
+      author: json['author'],
+    );
+  }
+}
+
 // Полный ответ backend для одного запроса статистики: разбивка + заголовок периода + жанры
 class StatsResponse {
   final String period; // month | season | year
@@ -38,6 +53,7 @@ class StatsResponse {
   final String? season; // только для period == season
   final String periodLabel; // готовый заголовок: "Июнь 2026", "Лето 2026", "2026"
   final List<PeriodStat> byPeriod;
+  final List<FinishedBookSummary> finishedBooks;
   final List<GenreStat> topGenres;
 
   StatsResponse({
@@ -47,6 +63,7 @@ class StatsResponse {
     this.season,
     required this.periodLabel,
     required this.byPeriod,
+    required this.finishedBooks,
     required this.topGenres,
   });
 
@@ -66,6 +83,9 @@ class StatsResponse {
       periodLabel: label?.toString() ?? '',
       byPeriod: (json['byPeriod'] as List? ?? [])
           .map((item) => PeriodStat.fromJson(item))
+          .toList(),
+      finishedBooks: (json['finishedBooks'] as List? ?? [])
+          .map((item) => FinishedBookSummary.fromJson(item))
           .toList(),
       topGenres: (json['topGenres'] as List? ?? [])
           .map((item) => GenreStat.fromJson(item))

@@ -131,12 +131,19 @@ async function getMonthBreakdown(userId, year, month) {
     new Date(year, month, 1)
   );
 
+  const finishedBooks = await getFinishedBooksInRange(
+    userId,
+    new Date(year, month - 1, 1),
+    new Date(year, month, 1)
+  );
+
   return {
     period: 'month',
     year,
     month,
     monthLabel: `${MONTH_NAMES[month - 1]} ${year}`,
     byPeriod,
+    finishedBooks,
     topGenres,
   };
 }
@@ -177,6 +184,7 @@ async function getSeasonBreakdown(userId, year, season) {
   const seasonEnd = new Date(year, months[months.length - 1], 1);
 
   const topGenres = await getTopGenresInRange(userId, seasonStart, seasonEnd);
+  const finishedBooks = await getFinishedBooksInRange(userId, seasonStart, seasonEnd);
 
   const seasonNames = { winter: 'Зима', spring: 'Весна', summer: 'Лето', autumn: 'Осень' };
 
@@ -186,6 +194,7 @@ async function getSeasonBreakdown(userId, year, season) {
     season,
     seasonLabel: `${seasonNames[season]} ${year}`,
     byPeriod,
+    finishedBooks,
     topGenres,
   };
 }
@@ -217,13 +226,38 @@ async function getYearBreakdown(userId, year) {
     new Date(year + 1, 0, 1)
   );
 
+  const finishedBooks = await getFinishedBooksInRange(
+    userId,
+    new Date(year, 0, 1),
+    new Date(year + 1, 0, 1)
+  );
+
   return {
     period: 'year',
     year,
     yearLabel: `${year}`,
     byPeriod,
+    finishedBooks,
     topGenres,
   };
+}
+
+// Список прочитанных книг (название + автор) за указанный промежуток,
+// отсортирован от самой недавно завершённой к самой ранней.
+async function getFinishedBooksInRange(userId, from, to) {
+  const result = await pool.query(
+    `SELECT title, author
+     FROM books
+     WHERE user_id = $1 AND status = 'finished'
+       AND finished_at >= $2 AND finished_at < $3
+     ORDER BY finished_at DESC`,
+    [userId, from, to]
+  );
+
+  return result.rows.map((row) => ({
+    title: row.title,
+    author: row.author,
+  }));
 }
 
 // Топ жанров за указанный промежуток

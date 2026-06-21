@@ -196,7 +196,7 @@ class _StatsScreenState extends State<StatsScreen> {
                         ],
                       ),
                     ),
-                    if (_statsResponse == null || _statsResponse!.byPeriod.every((s) => s.booksFinished == 0))
+                    if (_statsResponse == null || _statsResponse!.finishedBooks.isEmpty)
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
@@ -225,6 +225,10 @@ class _StatsScreenState extends State<StatsScreen> {
                           children: [
                             _buildChart(_statsResponse!),
                             const SizedBox(height: 24),
+                            if (_statsResponse!.finishedBooks.isNotEmpty) ...[
+                              _buildFinishedBooksList(_statsResponse!),
+                              const SizedBox(height: 24),
+                            ],
                             if (_statsResponse!.topGenres.isNotEmpty) _buildGenresList(_statsResponse!),
                           ],
                         ),
@@ -337,7 +341,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final showEveryLabel = response.period != 'month' || stats.length <= 14;
 
     return SizedBox(
-      height: 220,
+      height: response.period == 'month' ? 220 : 250,
       child: BarChart(
         BarChartData(
           maxY: (maxBooks + 1).toDouble(),
@@ -371,6 +375,7 @@ class _StatsScreenState extends State<StatsScreen> {
             bottomTitles: AxisTitles(
               sideTitles: SideTitles(
                 showTitles: true,
+                reservedSize: response.period == 'month' ? 24 : 50,
                 getTitlesWidget: (value, meta) {
                   final index = value.toInt();
                   if (index < 0 || index >= stats.length) {
@@ -380,11 +385,27 @@ class _StatsScreenState extends State<StatsScreen> {
                   if (!showEveryLabel && (index + 1) % 5 != 0 && index != 0) {
                     return const SizedBox.shrink();
                   }
+
+                  final label = Text(
+                    stats[index].label,
+                    style: const TextStyle(fontSize: 10),
+                  );
+
+                  // Для месяца подписи — просто числа дней, не требуют поворота.
+                  // Для сезона/года — полные названия месяцев, поворачиваем
+                  // на 45°, чтобы они не накладывались друг на друга.
+                  if (response.period == 'month') {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 6),
+                      child: label,
+                    );
+                  }
+
                   return Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text(
-                      stats[index].label,
-                      style: const TextStyle(fontSize: 10),
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Transform.rotate(
+                      angle: -0.6, // примерно -34 градуса
+                      child: label,
                     ),
                   );
                 },
@@ -399,6 +420,42 @@ class _StatsScreenState extends State<StatsScreen> {
           borderData: FlBorderData(show: false),
         ),
       ),
+    );
+  }
+
+  // Список прочитанных книг (название + автор) за выбранный период
+  Widget _buildFinishedBooksList(StatsResponse response) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text('Прочитанные книги', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+        const SizedBox(height: 8),
+        ...response.finishedBooks.map((book) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.only(top: 2, right: 8),
+                    child: Icon(Icons.menu_book_outlined, size: 16),
+                  ),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(book.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                        if (book.author != null && book.author!.isNotEmpty)
+                          Text(
+                            book.author!,
+                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            )),
+      ],
     );
   }
 
