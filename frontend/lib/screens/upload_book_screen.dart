@@ -19,6 +19,7 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
   final _titleController = TextEditingController();
   final _authorController = TextEditingController();
   final _genreController = TextEditingController();
+  final _descriptionController = TextEditingController();
   final _bookService = BookService();
 
   String? _filePath;
@@ -73,6 +74,7 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
         title: _titleController.text.trim(),
         author: _authorController.text.trim().isEmpty ? null : _authorController.text.trim(),
         genre: _genreController.text.trim().isEmpty ? null : _genreController.text.trim(),
+        description: _descriptionController.text.trim().isEmpty ? null : _descriptionController.text.trim(),
         filePath: _filePath!,
         coverPath: _coverPath,
       );
@@ -141,6 +143,17 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
                   labelText: 'Жанр',
                   border: OutlineInputBorder(),
                   hintText: 'Например: Фантастика, Роман, Нон-фикшн',
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _descriptionController,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Описание книги',
+                  border: OutlineInputBorder(),
+                  hintText: 'О чём эта книга, краткая аннотация...',
+                  alignLabelWithHint: true,
                 ),
               ),
               if (_errorMessage != null) ...[
@@ -225,6 +238,7 @@ class _UploadBookScreenState extends State<UploadBookScreen> {
     _titleController.dispose();
     _authorController.dispose();
     _genreController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 }

@@ -10,7 +10,7 @@ const { coversDir } = require('../middleware/upload');
 // Перед сохранением проверяется, нет ли у пользователя уже такой же книги
 // (совпадение названия и автора без учёта регистра и лишних пробелов).
 async function uploadBook(req, res) {
-  const { title, author, genre } = req.body;
+  const { title, author, genre, description } = req.body;
 
   if (!req.files || !req.files.book) {
     return res.status(400).json({ error: 'Файл книги обязателен' });
@@ -69,13 +69,14 @@ async function uploadBook(req, res) {
 
   try {
     const result = await pool.query(
-      `INSERT INTO books (user_id, title, author, file_path, file_format, cover_path, genre)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `INSERT INTO books (user_id, title, author, description, file_path, file_format, cover_path, genre)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING *`,
       [
         req.userId,
         title,
         author || null,
+        description && description.trim() !== '' ? description.trim() : null,
         bookFile.path,
         fileFormat,
         coverPath,
@@ -196,7 +197,7 @@ async function getBookById(req, res) {
 // Поле передано пустой строкой -> очищается (только для author/genre; title обязателен).
 // Поле передано с текстом -> обновляется.
 async function updateMetadata(req, res) {
-  const { title, author, genre } = req.body;
+  const { title, author, genre, description } = req.body;
 
   if (title !== undefined && title.trim() === '') {
     return res.status(400).json({ error: 'Название книги не может быть пустым' });
@@ -254,6 +255,10 @@ async function updateMetadata(req, res) {
     if (genre !== undefined) {
       fields.push(`genre = $${paramIndex++}`);
       values.push(genre.trim() === '' ? null : genre.trim());
+    }
+    if (description !== undefined) {
+      fields.push(`description = $${paramIndex++}`);
+      values.push(description.trim() === '' ? null : description.trim());
     }
 
     if (fields.length === 0) {
@@ -495,6 +500,7 @@ function formatBook(row) {
     id: row.id,
     title: row.title,
     author: row.author,
+    description: row.description,
     fileFormat: row.file_format,
     genre: row.genre,
     totalPages: row.total_pages,

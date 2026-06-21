@@ -28,6 +28,7 @@ class BookService {
     required String title,
     String? author,
     String? genre,
+    String? description,
     required String filePath,
     String? coverPath,
   }) async {
@@ -37,6 +38,7 @@ class BookService {
       'title': title,
       if (author != null) 'author': author,
       if (genre != null) 'genre': genre,
+      if (description != null) 'description': description,
       'book': await MultipartFile.fromFile(filePath),
       if (coverPath != null) 'cover': await MultipartFile.fromFile(coverPath),
     });
@@ -258,6 +260,7 @@ class BookService {
     String? title,
     String? author,
     String? genre,
+    String? description,
   }) async {
     final headers = await _authHeaders();
     headers['Content-Type'] = 'application/json';
@@ -269,6 +272,7 @@ class BookService {
         if (title != null) 'title': title,
         if (author != null) 'author': author,
         if (genre != null) 'genre': genre,
+        if (description != null) 'description': description,
       }),
     );
 

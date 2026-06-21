@@ -345,6 +345,12 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
             ],
           ),
           if (book.isFinished) _buildReviewSection(book),
+          if (book.description != null && book.description!.isNotEmpty) ...[
+            const SizedBox(height: 24),
+            const Text('Описание', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 8),
+            Text(book.description!, style: const TextStyle(fontSize: 14, height: 1.4)),
+          ],
           const SizedBox(height: 24),
           Text('Заметки (${_notes.length})',
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
@@ -381,34 +387,46 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
     final titleController = TextEditingController(text: _book!.title);
     final authorController = TextEditingController(text: _book!.author ?? '');
     final genreController = TextEditingController(text: _book!.genre ?? '');
+    final descriptionController = TextEditingController(text: _book!.description ?? '');
     final formKey = GlobalKey<FormState>();
 
     await showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Редактировать книгу'),
-        content: Form(
-          key: formKey,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextFormField(
-                controller: titleController,
-                decoration: const InputDecoration(labelText: 'Название *'),
-                validator: (value) =>
-                    (value == null || value.trim().isEmpty) ? 'Введите название' : null,
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: authorController,
-                decoration: const InputDecoration(labelText: 'Автор'),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: genreController,
-                decoration: const InputDecoration(labelText: 'Жанр'),
-              ),
-            ],
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: titleController,
+                  decoration: const InputDecoration(labelText: 'Название *'),
+                  validator: (value) =>
+                      (value == null || value.trim().isEmpty) ? 'Введите название' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: authorController,
+                  decoration: const InputDecoration(labelText: 'Автор'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: genreController,
+                  decoration: const InputDecoration(labelText: 'Жанр'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: descriptionController,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Описание',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
         actions: [
@@ -426,6 +444,7 @@ class _BookDetailScreenState extends State<BookDetailScreen> {
                   title: titleController.text.trim(),
                   author: authorController.text.trim(),
                   genre: genreController.text.trim(),
+                  description: descriptionController.text.trim(),
                 );
                 if (context.mounted) Navigator.of(context).pop();
                 _loadData();

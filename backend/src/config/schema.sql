@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS books (
     user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     title VARCHAR(500) NOT NULL,
     author VARCHAR(255),
+    description TEXT,
     file_path VARCHAR(500) NOT NULL,
     file_format VARCHAR(10) NOT NULL CHECK (file_format IN ('pdf', 'epub')),
     cover_path VARCHAR(500),
@@ -31,8 +32,9 @@ CREATE TABLE IF NOT EXISTS books (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Безопасное добавление поля review для баз, созданных до появления этой колонки
+-- Безопасное добавление полей для баз, созданных до появления этих колонок
 ALTER TABLE books ADD COLUMN IF NOT EXISTS review TEXT;
+ALTER TABLE books ADD COLUMN IF NOT EXISTS description TEXT;
 
 -- Заметки, привязанные к конкретной книге и месту в ней
 CREATE TABLE IF NOT EXISTS notes (

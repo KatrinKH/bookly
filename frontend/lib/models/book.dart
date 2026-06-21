@@ -4,6 +4,7 @@ class Book {
   final int id;
   final String title;
   final String? author;
+  final String? description; // описание книги, указанное при добавлении
   final String fileFormat; // 'pdf' или 'epub'
   final String? genre;
   final int? totalPages;
@@ -21,6 +22,7 @@ class Book {
     required this.id,
     required this.title,
     this.author,
+    this.description,
     required this.fileFormat,
     this.genre,
     this.totalPages,
@@ -40,6 +42,7 @@ class Book {
       id: json['id'],
       title: json['title'],
       author: json['author'],
+      description: json['description'],
       fileFormat: json['fileFormat'],
       genre: json['genre'],
       totalPages: json['totalPages'],
