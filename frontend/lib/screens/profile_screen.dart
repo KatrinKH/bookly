@@ -121,7 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   children: [
                     Text(
                       'Книг в библиотеке',
-                      style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0), fontSize: 14),
+                      style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
                     ),
                     Text(
                       '$_booksCount',
@@ -137,10 +137,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
                 leading: const Icon(Icons.settings_outlined),
                 title: const Text('Настройки'),
                 trailing: const Icon(Icons.chevron_right),
-                onTap: () {
-                  Navigator.of(context).push(
+                onTap: () async {
+                  await Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const SettingsScreen()),
                   );
+                  _loadUser(); // обновляем имя/email, если их поменяли в настройках
                 },
               ),
             ),
