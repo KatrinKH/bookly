@@ -32,13 +32,15 @@ class PeriodStat {
 
 // Краткая информация о прочитанной книге для списка в статистике
 class FinishedBookSummary {
+  final int id;
   final String title;
   final String? author;
 
-  FinishedBookSummary({required this.title, this.author});
+  FinishedBookSummary({required this.id, required this.title, this.author});
 
   factory FinishedBookSummary.fromJson(Map<String, dynamic> json) {
     return FinishedBookSummary(
+      id: json['id'],
       title: json['title'] ?? '',
       author: json['author'],
     );

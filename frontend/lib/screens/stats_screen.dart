@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import '../models/stats.dart';
 import '../services/stats_service.dart';
 import '../utils/app_theme.dart';
+import 'book_detail_screen.dart';
 
 const _seasonOrder = ['winter', 'spring', 'summer', 'autumn'];
 const _seasonNamesRu = {
@@ -423,36 +424,51 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  // Список прочитанных книг (название + автор) за выбранный период
+  // Список прочитанных книг (название + автор) за выбранный период.
+  // Каждый элемент кликабелен и открывает экран деталей соответствующей книги.
   Widget _buildFinishedBooksList(StatsResponse response) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Прочитанные книги', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
         const SizedBox(height: 8),
-        ...response.finishedBooks.map((book) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Padding(
-                    padding: EdgeInsets.only(top: 2, right: 8),
-                    child: Icon(Icons.menu_book_outlined, size: 16),
+        ...response.finishedBooks.map((book) => Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(8),
+                onTap: () async {
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => BookDetailScreen(bookId: book.id)),
+                  );
+                  // После возврата обновляем статистику — вдруг что-то изменилось
+                  _loadStats();
+                },
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Padding(
+                        padding: EdgeInsets.only(top: 2, right: 8),
+                        child: Icon(Icons.menu_book_outlined, size: 16),
+                      ),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(book.title, style: const TextStyle(fontWeight: FontWeight.w600)),
+                            if (book.author != null && book.author!.isNotEmpty)
+                              Text(
+                                book.author!,
+                                style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+                    ],
                   ),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(book.title, style: const TextStyle(fontWeight: FontWeight.w600)),
-                        if (book.author != null && book.author!.isNotEmpty)
-                          Text(
-                            book.author!,
-                            style: TextStyle(color: Colors.grey.shade600, fontSize: 13),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
+                ),
               ),
             )),
       ],

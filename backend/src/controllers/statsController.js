@@ -242,11 +242,11 @@ async function getYearBreakdown(userId, year) {
   };
 }
 
-// Список прочитанных книг (название + автор) за указанный промежуток,
+// Список прочитанных книг (id + название + автор) за указанный промежуток,
 // отсортирован от самой недавно завершённой к самой ранней.
 async function getFinishedBooksInRange(userId, from, to) {
   const result = await pool.query(
-    `SELECT title, author
+    `SELECT id, title, author
      FROM books
      WHERE user_id = $1 AND status = 'finished'
        AND finished_at >= $2 AND finished_at < $3
@@ -255,6 +255,7 @@ async function getFinishedBooksInRange(userId, from, to) {
   );
 
   return result.rows.map((row) => ({
+    id: row.id,
     title: row.title,
     author: row.author,
   }));
