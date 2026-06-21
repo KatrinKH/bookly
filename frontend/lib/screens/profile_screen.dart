@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/user.dart';
 import '../services/auth_service.dart';
+import '../services/book_service.dart';
 import '../utils/app_theme.dart';
 import 'login_screen.dart';
 import 'settings_screen.dart';
@@ -15,13 +16,25 @@ class ProfileScreen extends StatefulWidget {
 
 class _ProfileScreenState extends State<ProfileScreen> {
   final AuthService _authService = AuthService();
+  final BookService _bookService = BookService();
   AppUser? _user;
+  int? _booksCount;
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
     _loadUser();
+    _loadBooksCount();
+  }
+
+  Future<void> _loadBooksCount() async {
+    try {
+      final books = await _bookService.getBooks();
+      if (mounted) setState(() => _booksCount = books.length);
+    } catch (_) {
+      // Если не удалось загрузить — просто не показываем число, без лишнего шума
+    }
   }
 
   Future<void> _loadUser() async {
@@ -100,6 +113,25 @@ class _ProfileScreenState extends State<ProfileScreen> {
               style: TextStyle(color: Colors.grey.shade600),
             ),
             const SizedBox(height: 32),
+            if (_booksCount != null) ...[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Книг в библиотеке',
+                      style: TextStyle(color: const Color.fromARGB(255, 0, 0, 0), fontSize: 14),
+                    ),
+                    Text(
+                      '$_booksCount',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+            ],
             Card(
               child: ListTile(
                 leading: const Icon(Icons.settings_outlined),
