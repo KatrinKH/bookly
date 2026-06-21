@@ -101,10 +101,74 @@ async function getProfile(req, res) {
   }
 }
 
+// Изменение имени и/или email пользователя.
+// Поле не передано вовсе -> остаётся как было.
+// При смене email проверяется, что новый адрес не занят другим пользователем.
+async function updateProfile(req, res) {
+  const { displayName, email } = req.body;
+
+  if (displayName !== undefined && displayName.trim() === '') {
+    return res.status(400).json({ error: 'Имя не может быть пустым' });
+  }
+
+  if (email !== undefined && email.trim() === '') {
+    return res.status(400).json({ error: 'Email не может быть пустым' });
+  }
+
+  try {
+    if (email !== undefined) {
+      const existing = await pool.query(
+        'SELECT id FROM users WHERE email = $1 AND id != $2',
+        [email.trim(), req.userId]
+      );
+      if (existing.rows.length > 0) {
+        return res.status(409).json({ error: 'Этот email уже используется другим аккаунтом' });
+      }
+    }
+
+    const fields = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (displayName !== undefined) {
+      fields.push(`display_name = $${paramIndex++}`);
+      values.push(displayName.trim());
+    }
+    if (email !== undefined) {
+      fields.push(`email = $${paramIndex++}`);
+      values.push(email.trim());
+    }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: 'Нет данных для обновления' });
+    }
+
+    values.push(req.userId);
+
+    const result = await pool.query(
+      `UPDATE users SET ${fields.join(', ')}
+       WHERE id = $${paramIndex}
+       RETURNING id, email, display_name, created_at`,
+      values
+    );
+
+    const user = result.rows[0];
+    res.json({
+      id: user.id,
+      email: user.email,
+      displayName: user.display_name,
+      createdAt: user.created_at,
+    });
+  } catch (err) {
+    console.error('Ошибка обновления профиля:', err);
+    res.status(500).json({ error: 'Внутренняя ошибка сервера' });
+  }
+}
+
 function generateToken(userId) {
   return jwt.sign({ userId }, process.env.JWT_SECRET, {
     expiresIn: process.env.JWT_EXPIRES_IN || '7d',
   });
 }
 
-module.exports = { register, login, getProfile };
+module.exports = { register, login, getProfile, updateProfile };
