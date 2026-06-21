@@ -4,7 +4,9 @@ import 'api_config.dart';
 import 'storage_service.dart';
 import '../models/stats.dart';
 
-// Сервис получения статистики чтения по периодам (месяц/сезон/год) и сводной статистики
+// Сервис получения статистики чтения по периодам (месяц/сезон/год) и сводной статистики.
+// Для месяца/сезона/года можно запросить конкретный период через year/month/season,
+// иначе backend вернёт статистику за текущий период.
 class StatsService {
   final StorageService _storage = StorageService();
 
@@ -14,12 +16,25 @@ class StatsService {
   }
 
   // period: 'month' | 'season' | 'year'
-  Future<List<PeriodStat>> getPeriodStats(String period) async {
+  // year/month/season — опциональные параметры для просмотра конкретного периода.
+  // season принимает значения: winter | spring | summer | autumn
+  Future<StatsResponse> getStats({
+    required String period,
+    int? year,
+    int? month,
+    String? season,
+  }) async {
     final headers = await _authHeaders();
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/stats?period=$period'),
-      headers: headers,
-    );
+
+    final queryParams = {
+      'period': period,
+      if (year != null) 'year': year.toString(),
+      if (month != null) 'month': month.toString(),
+      if (season != null) 'season': season,
+    };
+
+    final uri = Uri.parse('${ApiConfig.baseUrl}/stats').replace(queryParameters: queryParams);
+    final response = await http.get(uri, headers: headers);
 
     final data = jsonDecode(response.body);
 
@@ -27,25 +42,7 @@ class StatsService {
       throw Exception(data['error'] ?? 'Не удалось загрузить статистику (код ${response.statusCode})');
     }
 
-    final List byPeriod = data['byPeriod'] ?? [];
-    return byPeriod.map((json) => PeriodStat.fromJson(json)).toList();
-  }
-
-  Future<List<GenreStat>> getTopGenres() async {
-    final headers = await _authHeaders();
-    final response = await http.get(
-      Uri.parse('${ApiConfig.baseUrl}/stats?period=month'),
-      headers: headers,
-    );
-
-    final data = jsonDecode(response.body);
-
-    if (response.statusCode != 200) {
-      throw Exception(data['error'] ?? 'Не удалось загрузить жанры (код ${response.statusCode})');
-    }
-
-    final List topGenres = data['topGenres'] ?? [];
-    return topGenres.map((json) => GenreStat.fromJson(json)).toList();
+    return StatsResponse.fromJson(data);
   }
 
   Future<OverallStats> getOverallStats() async {

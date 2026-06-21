@@ -1,39 +1,72 @@
 const pool = require('../config/db');
 
-// Карта периодов в формат, понятный date_trunc в PostgreSQL
-const PERIOD_MAP = {
-  month: 'month',
-  season: null, // сезон обрабатывается отдельно, так как его нет в date_trunc
-  year: 'year',
-};
-
-// Вспомогательный запрос: суммарное время чтения (в часах) за указанный период.
-// Считается из reading_sessions как SUM(ended_at - started_at),
-// исключая незакрытые сессии (ended_at IS NULL) и сессии дольше 8 часов
-// (защита от незакрытых сессий при аварийном выходе).
-async function getReadingHoursForPeriod(userId, truncUnit, periodStart) {
+// Вспомогательная функция: считает часы чтения из reading_sessions
+// за промежуток [from, to) для конкретного пользователя.
+// Сессии без ended_at и длиннее 8 часов исключаются (защита от "забытых" сессий).
+async function getReadingHours(userId, from, to) {
   const result = await pool.query(
-    `SELECT
-       COALESCE(
-         EXTRACT(EPOCH FROM SUM(
-           CASE
-             WHEN ended_at IS NOT NULL
-              AND ended_at - started_at < INTERVAL '8 hours'
-             THEN ended_at - started_at
-             ELSE INTERVAL '0'
-           END
-         )) / 3600,
-         0
-       ) AS hours
+    `SELECT COALESCE(
+       EXTRACT(EPOCH FROM SUM(
+         CASE
+           WHEN ended_at IS NOT NULL
+            AND ended_at - started_at < INTERVAL '8 hours'
+           THEN ended_at - started_at
+           ELSE INTERVAL '0'
+         END
+       )) / 3600,
+       0
+     ) AS hours
      FROM reading_sessions
-     WHERE user_id = $1
-       AND date_trunc('${truncUnit}', started_at) = $2`,
-    [userId, periodStart]
+     WHERE user_id = $1 AND started_at >= $2 AND started_at < $3`,
+    [userId, from, to]
   );
-  return parseFloat(result.rows[0].hours).toFixed(1);
+  return parseFloat(parseFloat(result.rows[0].hours).toFixed(1));
 }
 
-// Возвращает общую статистику за заданный период: month | season | year
+// Считает книги/оценку/лайки, завершённые в промежутке [from, to)
+async function getBookStatsInRange(userId, from, to) {
+  const result = await pool.query(
+    `SELECT
+       COUNT(*) AS books_finished,
+       COALESCE(AVG(rating), 0) AS avg_rating,
+       COUNT(*) FILTER (WHERE liked = true) AS liked_count
+     FROM books
+     WHERE user_id = $1 AND status = 'finished'
+       AND finished_at >= $2 AND finished_at < $3`,
+    [userId, from, to]
+  );
+  const row = result.rows[0];
+  return {
+    booksFinished: parseInt(row.books_finished, 10),
+    avgRating: parseFloat(row.avg_rating).toFixed(2),
+    likedCount: parseInt(row.liked_count, 10),
+  };
+}
+
+const MONTH_NAMES_SHORT = [
+  'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
+  'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек',
+];
+
+const SEASON_MONTHS = {
+  winter: [12, 1, 2],
+  spring: [3, 4, 5],
+  summer: [6, 7, 8],
+  autumn: [9, 10, 11],
+};
+
+function monthToSeason(month) {
+  if ([12, 1, 2].includes(month)) return 'winter';
+  if ([3, 4, 5].includes(month)) return 'spring';
+  if ([6, 7, 8].includes(month)) return 'summer';
+  return 'autumn';
+}
+
+// Возвращает детальную статистику чтения с разбивкой на подпериоды:
+//   period=month  -> по дням выбранного месяца (?year=YYYY&month=MM)
+//   period=season -> по месяцам выбранного сезона (?year=YYYY&season=winter|spring|summer|autumn)
+//   period=year   -> по месяцам выбранного года (?year=YYYY)
+// Если year/month/season не переданы — используется текущая дата.
 async function getStats(req, res) {
   const period = req.query.period || 'month';
 
@@ -41,153 +74,171 @@ async function getStats(req, res) {
     return res.status(400).json({ error: 'Параметр period должен быть month, season или year' });
   }
 
+  const now = new Date();
+  const year = parseInt(req.query.year, 10) || now.getFullYear();
+
   try {
-    if (period === 'season') {
-      return res.json(await getSeasonStats(req.userId));
+    if (period === 'month') {
+      const month = parseInt(req.query.month, 10) || now.getMonth() + 1; // 1..12
+      return res.json(await getMonthBreakdown(req.userId, year, month));
     }
 
-    const truncUnit = PERIOD_MAP[period]; // 'month' или 'year' — значения фиксированы и безопасны
+    if (period === 'season') {
+      const season = req.query.season || monthToSeason(now.getMonth() + 1);
+      return res.json(await getSeasonBreakdown(req.userId, year, season));
+    }
 
-    const finishedBooksResult = await pool.query(
-      `SELECT
-         date_trunc('${truncUnit}', finished_at) AS period_start,
-         COUNT(*) AS books_finished,
-         COALESCE(AVG(rating), 0) AS avg_rating,
-         COUNT(*) FILTER (WHERE liked = true) AS liked_count
-       FROM books
-       WHERE user_id = $1 AND status = 'finished' AND finished_at IS NOT NULL
-       GROUP BY period_start
-       ORDER BY period_start DESC`,
-      [req.userId]
-    );
-
-    // Для каждого периода считаем часы чтения из сессий
-    const byPeriod = await Promise.all(
-      finishedBooksResult.rows.map(async (row) => {
-        const hours = await getReadingHoursForPeriod(req.userId, truncUnit, row.period_start);
-        return {
-          periodStart: row.period_start,
-          booksFinished: parseInt(row.books_finished, 10),
-          avgRating: parseFloat(row.avg_rating).toFixed(2),
-          readingHours: parseFloat(hours),
-          likedCount: parseInt(row.liked_count, 10),
-        };
-      })
-    );
-
-    const genreResult = await pool.query(
-      `SELECT genre, COUNT(*) AS count
-       FROM books
-       WHERE user_id = $1 AND status = 'finished' AND genre IS NOT NULL
-       GROUP BY genre
-       ORDER BY count DESC
-       LIMIT 5`,
-      [req.userId]
-    );
-
-    res.json({
-      period,
-      byPeriod,
-      topGenres: genreResult.rows.map((row) => ({
-        genre: row.genre,
-        count: parseInt(row.count, 10),
-      })),
-    });
+    // period === 'year'
+    return res.json(await getYearBreakdown(req.userId, year));
   } catch (err) {
     console.error('Ошибка получения статистики:', err);
     res.status(500).json({ error: 'Внутренняя ошибка сервера' });
   }
 }
 
-// Сезонная статистика считается отдельно, так как "сезон" не является
-// встроенной единицей date_trunc в PostgreSQL.
-async function getSeasonStats(userId) {
-  const booksResult = await pool.query(
-    `SELECT
-       EXTRACT(YEAR FROM finished_at) AS year,
-       EXTRACT(MONTH FROM finished_at) AS month,
-       rating,
-       liked
+// Разбивка месяца по дням
+async function getMonthBreakdown(userId, year, month) {
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const byPeriod = [];
+
+  for (let day = 1; day <= daysInMonth; day++) {
+    const from = new Date(year, month - 1, day);
+    const to = new Date(year, month - 1, day + 1);
+
+    const bookStats = await getBookStatsInRange(userId, from, to);
+    const hours = await getReadingHours(userId, from, to);
+
+    byPeriod.push({
+      label: `${day}`,
+      day,
+      booksFinished: bookStats.booksFinished,
+      avgRating: bookStats.avgRating,
+      readingHours: hours,
+      likedCount: bookStats.likedCount,
+    });
+  }
+
+  const topGenres = await getTopGenresInRange(
+    userId,
+    new Date(year, month - 1, 1),
+    new Date(year, month, 1)
+  );
+
+  return {
+    period: 'month',
+    year,
+    month,
+    monthLabel: `${MONTH_NAMES_SHORT[month - 1]} ${year}`,
+    byPeriod,
+    topGenres,
+  };
+}
+
+// Разбивка сезона по трём месяцам
+async function getSeasonBreakdown(userId, year, season) {
+  const months = SEASON_MONTHS[season];
+  if (!months) {
+    throw new Error('Некорректное название сезона');
+  }
+
+  const byPeriod = [];
+
+  for (const month of months) {
+    // Зимние месяцы декабрь относится к предыдущему календарному году относительно year сезона
+    const calendarYear = season === 'winter' && month === 12 ? year - 1 : year;
+    const from = new Date(calendarYear, month - 1, 1);
+    const to = new Date(calendarYear, month, 1);
+
+    const bookStats = await getBookStatsInRange(userId, from, to);
+    const hours = await getReadingHours(userId, from, to);
+
+    byPeriod.push({
+      label: MONTH_NAMES_SHORT[month - 1],
+      month,
+      booksFinished: bookStats.booksFinished,
+      avgRating: bookStats.avgRating,
+      readingHours: hours,
+      likedCount: bookStats.likedCount,
+    });
+  }
+
+  const seasonStart = new Date(
+    season === 'winter' ? year - 1 : year,
+    months[0] - 1,
+    1
+  );
+  const seasonEnd = new Date(year, months[months.length - 1], 1);
+
+  const topGenres = await getTopGenresInRange(userId, seasonStart, seasonEnd);
+
+  const seasonNames = { winter: 'Зима', spring: 'Весна', summer: 'Лето', autumn: 'Осень' };
+
+  return {
+    period: 'season',
+    year,
+    season,
+    seasonLabel: `${seasonNames[season]} ${year}`,
+    byPeriod,
+    topGenres,
+  };
+}
+
+// Разбивка года по 12 месяцам
+async function getYearBreakdown(userId, year) {
+  const byPeriod = [];
+
+  for (let month = 1; month <= 12; month++) {
+    const from = new Date(year, month - 1, 1);
+    const to = new Date(year, month, 1);
+
+    const bookStats = await getBookStatsInRange(userId, from, to);
+    const hours = await getReadingHours(userId, from, to);
+
+    byPeriod.push({
+      label: MONTH_NAMES_SHORT[month - 1],
+      month,
+      booksFinished: bookStats.booksFinished,
+      avgRating: bookStats.avgRating,
+      readingHours: hours,
+      likedCount: bookStats.likedCount,
+    });
+  }
+
+  const topGenres = await getTopGenresInRange(
+    userId,
+    new Date(year, 0, 1),
+    new Date(year + 1, 0, 1)
+  );
+
+  return {
+    period: 'year',
+    year,
+    yearLabel: `${year}`,
+    byPeriod,
+    topGenres,
+  };
+}
+
+// Топ жанров за указанный промежуток
+async function getTopGenresInRange(userId, from, to) {
+  const result = await pool.query(
+    `SELECT genre, COUNT(*) AS count
      FROM books
-     WHERE user_id = $1 AND status = 'finished' AND finished_at IS NOT NULL`,
-    [userId]
+     WHERE user_id = $1 AND status = 'finished' AND genre IS NOT NULL
+       AND finished_at >= $2 AND finished_at < $3
+     GROUP BY genre
+     ORDER BY count DESC
+     LIMIT 5`,
+    [userId, from, to]
   );
 
-  // Считаем суммарное время чтения по сезонам из сессий
-  const sessionsResult = await pool.query(
-    `SELECT
-       EXTRACT(YEAR FROM started_at) AS year,
-       EXTRACT(MONTH FROM started_at) AS month,
-       EXTRACT(EPOCH FROM (
-         CASE
-           WHEN ended_at IS NOT NULL
-            AND ended_at - started_at < INTERVAL '8 hours'
-           THEN ended_at - started_at
-           ELSE INTERVAL '0'
-         END
-       )) / 3600 AS hours
-     FROM reading_sessions
-     WHERE user_id = $1 AND ended_at IS NOT NULL`,
-    [userId]
-  );
-
-  const seasons = {};
-
-  const monthToSeason = (month) => {
-    if ([12, 1, 2].includes(month)) return 'winter';
-    if ([3, 4, 5].includes(month)) return 'spring';
-    if ([6, 7, 8].includes(month)) return 'summer';
-    return 'autumn';
-  };
-
-  const getSeasonKey = (month, year) => {
-    const season = monthToSeason(month);
-    const seasonYear = month === 12 ? year + 1 : year;
-    return { key: `${seasonYear}-${season}`, season, seasonYear };
-  };
-
-  booksResult.rows.forEach((row) => {
-    const month = parseInt(row.month, 10);
-    const year = parseInt(row.year, 10);
-    const { key, season, seasonYear } = getSeasonKey(month, year);
-
-    if (!seasons[key]) {
-      seasons[key] = { season, year: seasonYear, booksFinished: 0, ratingSum: 0, ratingCount: 0, readingHours: 0, likedCount: 0 };
-    }
-
-    seasons[key].booksFinished += 1;
-    if (row.rating) { seasons[key].ratingSum += row.rating; seasons[key].ratingCount += 1; }
-    if (row.liked) { seasons[key].likedCount += 1; }
-  });
-
-  sessionsResult.rows.forEach((row) => {
-    const month = parseInt(row.month, 10);
-    const year = parseInt(row.year, 10);
-    const { key, season, seasonYear } = getSeasonKey(month, year);
-
-    if (!seasons[key]) {
-      seasons[key] = { season, year: seasonYear, booksFinished: 0, ratingSum: 0, ratingCount: 0, readingHours: 0, likedCount: 0 };
-    }
-
-    seasons[key].readingHours += parseFloat(row.hours) || 0;
-  });
-
-  const byPeriod = Object.values(seasons)
-    .map((s) => ({
-      season: s.season,
-      year: s.year,
-      booksFinished: s.booksFinished,
-      avgRating: s.ratingCount > 0 ? (s.ratingSum / s.ratingCount).toFixed(2) : '0.00',
-      readingHours: parseFloat(s.readingHours.toFixed(1)),
-      likedCount: s.likedCount,
-    }))
-    .sort((a, b) => b.year - a.year);
-
-  return { period: 'season', byPeriod };
+  return result.rows.map((row) => ({
+    genre: row.genre,
+    count: parseInt(row.count, 10),
+  }));
 }
 
 // Сводная статистика "за всё время" — для главного экрана статистики.
-// Считает общее время чтения из сессий вместо суммы страниц.
 async function getOverallStats(req, res) {
   try {
     const booksResult = await pool.query(
@@ -201,7 +252,6 @@ async function getOverallStats(req, res) {
       [req.userId]
     );
 
-    // Суммарное время чтения из всех закрытых сессий пользователя
     const hoursResult = await pool.query(
       `SELECT COALESCE(
          EXTRACT(EPOCH FROM SUM(
