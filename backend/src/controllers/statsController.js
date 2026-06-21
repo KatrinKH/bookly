@@ -43,6 +43,13 @@ async function getBookStatsInRange(userId, from, to) {
   };
 }
 
+const MONTH_NAMES = [
+  'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
+  'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь',
+];
+
+// Сокращённые названия — используются только для подписей на оси X
+// в режиме "Год", где иначе 12 полных названий месяцев не помещаются на экране.
 const MONTH_NAMES_SHORT = [
   'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн',
   'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек',
@@ -128,7 +135,7 @@ async function getMonthBreakdown(userId, year, month) {
     period: 'month',
     year,
     month,
-    monthLabel: `${MONTH_NAMES_SHORT[month - 1]} ${year}`,
+    monthLabel: `${MONTH_NAMES[month - 1]} ${year}`,
     byPeriod,
     topGenres,
   };
@@ -153,7 +160,7 @@ async function getSeasonBreakdown(userId, year, season) {
     const hours = await getReadingHours(userId, from, to);
 
     byPeriod.push({
-      label: MONTH_NAMES_SHORT[month - 1],
+      label: MONTH_NAMES[month - 1],
       month,
       booksFinished: bookStats.booksFinished,
       avgRating: bookStats.avgRating,
